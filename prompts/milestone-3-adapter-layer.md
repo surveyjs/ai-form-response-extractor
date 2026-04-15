@@ -21,6 +21,7 @@ Implement SurveyJS and JSON Schema adapters that convert form definitions into L
   - `comment` — multi-line text
   - `radiogroup` — single choice from list
   - `checkbox` — multiple choices from list
+  - `tagbox` — multi-select dropdown (same data shape as checkbox)
   - `dropdown` — single choice from dropdown
   - `rating` — numeric rating (include rateMin, rateMax)
   - `boolean` — true/false
@@ -48,7 +49,7 @@ Implement SurveyJS and JSON Schema adapters that convert form definitions into L
   - `text` → `z.string()` (or `z.number()` for inputType=number)
   - `comment` → `z.string()`
   - `radiogroup` / `dropdown` → `z.string()` (or `z.enum()` if choices are fixed)
-  - `checkbox` → `z.array(z.string())`
+  - `checkbox` / `tagbox` → `z.array(z.string())`
   - `rating` → `z.number()`
   - `boolean` → `z.boolean()`
   - `matrix` → `z.record(z.string())` (row name → selected column)
