@@ -335,6 +335,34 @@ describe('createExtractor', () => {
 
       expect(result.confidence.every(c => c.flagged)).toBe(true);
     });
+
+    it('includes omitted optional fields in data and confidence with null/0.0', async () => {
+      // LLM returns only required fields, omitting optional "email"
+      const responseData = { firstName: 'John', lastName: 'Doe' };
+      const provider = createMockProvider([{ content: JSON.stringify(responseData) }]);
+
+      const extractor = createExtractor({
+        provider,
+        adapter: 'surveyjs',
+        options: { preprocessImage: false },
+      });
+
+      const result = await extractor.extractFromImage({
+        image: TINY_PNG,
+        formDefinition: simpleSurveyDef,
+      });
+
+      // All 3 schema fields should be present in confidence
+      expect(result.confidence).toHaveLength(3);
+
+      // Omitted optional field should appear as null in data
+      expect(result.data.email).toBeNull();
+
+      const emailConf = result.confidence.find(c => c.fieldName === 'email');
+      expect(emailConf?.confidence).toBe(0.0);
+      expect(emailConf?.flagged).toBe(true);
+      expect(emailConf?.value).toBeNull();
+    });
   });
 
   describe('unique ID detection', () => {

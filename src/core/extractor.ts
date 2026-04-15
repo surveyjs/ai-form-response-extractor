@@ -9,6 +9,15 @@ import { SurveyJSAdapter } from '../adapters/surveyjs';
 import { JsonSchemaAdapter } from '../adapters/json-schema';
 import { preprocessImage, imageToBase64 } from '../utils/image';
 import { detectUniqueId } from '../utils/qr';
+import { z } from 'zod';
+
+/** Extract expected field names from a Zod schema (ZodObject). */
+function getSchemaKeys(schema: z.ZodType): string[] {
+  if (schema instanceof z.ZodObject) {
+    return Object.keys(schema.shape);
+  }
+  return [];
+}
 
 function resolveAdapter(config: ExtractorConfig): FormAdapter {
   switch (config.adapter) {
@@ -131,9 +140,20 @@ export function createExtractor(config: ExtractorConfig) {
             data[field] = null;
           }
 
-          // Compute confidence scores
-          const confidence: FieldConfidence[] = Object.keys(data).map((fieldName) => {
-            const value = data[fieldName];
+          // Compute confidence scores over all schema-expected keys
+          // so consumers always get a consistent shape, even for
+          // optional fields the LLM omitted entirely.
+          const schemaKeys = getSchemaKeys(outputSchema);
+          const allKeys = schemaKeys.length > 0
+            ? schemaKeys
+            : Object.keys(data);
+
+          const confidence: FieldConfidence[] = allKeys.map((fieldName) => {
+            const value = fieldName in data ? data[fieldName] : null;
+            // Ensure omitted optional fields appear in data as null
+            if (!(fieldName in data)) {
+              data[fieldName] = null;
+            }
             let fieldConfidence: number;
             if (confidenceMap[fieldName] !== undefined) {
               fieldConfidence = confidenceMap[fieldName];
