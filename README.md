@@ -1,5 +1,6 @@
 # hybrid-form-ai
 
+[![CI](https://github.com/surveyjs/hybrid-form-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/surveyjs/hybrid-form-ai/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/hybrid-form-ai.svg)](https://www.npmjs.com/package/hybrid-form-ai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
