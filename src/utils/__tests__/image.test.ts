@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { imageToBase64, preprocessImage } from '../image';
 
 // Minimal valid 1x1 PNG (transparent pixel)
@@ -57,6 +57,10 @@ describe('imageToBase64', () => {
 });
 
 describe('preprocessImage', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
   it('returns processed PNG buffer when sharp is available', async () => {
     const result = await preprocessImage(MINIMAL_PNG);
     expect(Buffer.isBuffer(result)).toBe(true);

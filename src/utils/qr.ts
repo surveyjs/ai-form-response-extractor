@@ -1,5 +1,5 @@
 import type { ImageInput } from '../core/types';
-import { readFile } from 'node:fs/promises';
+import { resolveToBuffer } from './resolve-buffer';
 import jsQR from 'jsqr';
 
 /**
@@ -13,26 +13,11 @@ export interface UniqueIdResult {
   confidence: number;
 }
 
-/** Resolve an ImageInput to a raw Buffer */
-async function resolveToBuffer(input: ImageInput): Promise<Buffer> {
-  if (Buffer.isBuffer(input)) return input;
-  if (input instanceof Uint8Array) return Buffer.from(input);
-  if (typeof input === 'string') {
-    if (input.startsWith('http://') || input.startsWith('https://')) {
-      const res = await fetch(input);
-      if (!res.ok) throw new Error(`Failed to fetch image: ${res.status} ${res.statusText}`);
-      return Buffer.from(await res.arrayBuffer());
-    }
-    return readFile(input);
-  }
-  throw new Error('Unsupported image input type');
-}
-
 /** Try to get RGBA pixel data from an image buffer using sharp */
 async function toRGBA(buf: Buffer): Promise<{ data: Uint8ClampedArray; width: number; height: number } | null> {
   try {
     const sharpModule = await import('sharp');
-    const sharp = sharpModule.default;
+    const sharp = sharpModule.default ?? sharpModule;
     const image = sharp(buf).ensureAlpha().raw();
     const { data, info } = await image.toBuffer({ resolveWithObject: true });
     return {

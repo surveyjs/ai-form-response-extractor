@@ -1,26 +1,11 @@
-import { readFile } from 'node:fs/promises';
 import type { ImageInput } from '../core/types';
+import { resolveToBuffer } from './resolve-buffer';
 
 /**
  * Image preprocessing utilities.
  * Handles loading images from various sources and optional preprocessing
  * (resize, contrast, deskew) before sending to vision models.
  */
-
-/** Resolve an ImageInput to a raw Buffer */
-async function resolveToBuffer(input: ImageInput): Promise<Buffer> {
-  if (Buffer.isBuffer(input)) return input;
-  if (input instanceof Uint8Array) return Buffer.from(input);
-  if (typeof input === 'string') {
-    if (input.startsWith('http://') || input.startsWith('https://')) {
-      const res = await fetch(input);
-      if (!res.ok) throw new Error(`Failed to fetch image: ${res.status} ${res.statusText}`);
-      return Buffer.from(await res.arrayBuffer());
-    }
-    return readFile(input);
-  }
-  throw new Error('Unsupported image input type');
-}
 
 /** Detect MIME type from magic bytes */
 function detectMime(buf: Buffer): string {
@@ -63,7 +48,7 @@ async function tryLoadSharp(): Promise<any> {
 
 const MAX_DIMENSION = 2048;
 
-/** Optional preprocessing: resize, enhance contrast. Returns raw image buffer. */
+/** Optional preprocessing: resize, enhance contrast. Returns the original buffer if sharp is unavailable; otherwise returns a PNG-encoded buffer. */
 export async function preprocessImage(input: ImageInput): Promise<Buffer> {
   const buf = await resolveToBuffer(input);
   const sharp = await tryLoadSharp();
