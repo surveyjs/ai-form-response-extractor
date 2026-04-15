@@ -76,7 +76,7 @@ describe('mergeResponses', () => {
     expect(result[0]._mergeDetails!.city).toBe('online');
   });
 
-  it('highest-confidence — paper wins when confidence > 1.0 (online)', () => {
+  it('highest-confidence — equal confidence prefers online', () => {
     const online = [{ uniqueId: 'id-1', score: 80 }];
     const paper = [makeExtraction({ score: 90 }, 'id-1', [
       { fieldName: 'score', value: 90, confidence: 1.0 },

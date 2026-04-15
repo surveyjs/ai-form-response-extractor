@@ -125,21 +125,17 @@ export function mergeResponses(
 
       // Merge all paper extractions in order into a combined paper record
       let combinedPaperData: Record<string, unknown> = {};
-      let combinedConfidence: FieldConfidence[] = [];
+      const combinedConfidenceByField = new Map<string, FieldConfidence>();
 
       for (const extraction of extractions) {
         combinedPaperData = { ...combinedPaperData, ...extraction.data };
         // Later extractions' confidence entries override earlier ones for same fields
-        const existingFields = new Set(combinedConfidence.map((c) => c.fieldName));
         for (const fc of extraction.confidence) {
-          if (existingFields.has(fc.fieldName)) {
-            combinedConfidence = combinedConfidence.filter(
-              (c) => c.fieldName !== fc.fieldName
-            );
-          }
-          combinedConfidence.push(fc);
+          combinedConfidenceByField.set(fc.fieldName, fc);
         }
       }
+
+      const combinedConfidence = Array.from(combinedConfidenceByField.values());
 
       const { merged, details } = mergeFields(
         onlineRecord,
