@@ -1,0 +1,127 @@
+# Architecture
+
+**Project:** hybrid-form-ai  
+**Last Updated:** April 15, 2026
+
+---
+
+## System Overview
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                      hybrid-form-ai                          │
+│                                                              │
+│  ┌─────────────┐  ┌──────────────┐  ┌────────────────────┐  │
+│  │   Adapters   │  │     Core     │  │    Providers       │  │
+│  │             │  │              │  │                    │  │
+│  │  SurveyJS   │──│  Extractor   │──│  OpenAI            │  │
+│  │  JSON Schema│  │  Pipeline    │  │  Anthropic         │  │
+│  │  Custom     │  │              │  │  Ollama            │  │
+│  └─────────────┘  └──────────────┘  └────────────────────┘  │
+│                          │                                    │
+│                   ┌──────┴──────┐                             │
+│                   │   Utilities  │                             │
+│                   │             │                             │
+│                   │  Image      │                             │
+│                   │  QR/ID      │                             │
+│                   │  Merging    │                             │
+│                   └─────────────┘                             │
+└──────────────────────────────────────────────────────────────┘
+```
+
+## Data Flow
+
+### Extraction Pipeline
+
+```
+Input Image ─┐
+              ├──▶ Image Preprocessing (optional)
+              │         │
+              │         ▼
+              │    QR/ID Detection ──▶ uniqueId
+              │         │
+              │         ▼
+Form JSON ───┤    Adapter.toPrompt()
+              │         │
+              │         ▼
+              │    LLM Provider.extractFromImage()
+              │         │
+              │         ▼
+              │    JSON Parsing
+              │         │
+              │         ▼
+              │    Zod Validation (Adapter.toOutputSchema())
+              │         │
+              │         ▼
+              │    Confidence Scoring
+              │         │
+              │         ▼
+              └──▶ ExtractionResult { data, uniqueId, confidence }
+```
+
+### Response Merging
+
+```
+Online Responses ──┐
+                    ├──▶ Index by uniqueId
+                    │         │
+Paper Extractions ─┘         ▼
+                        Match + Merge
+                              │
+                              ▼
+                     Conflict Resolution
+                     (prefer-online | prefer-paper | highest-confidence)
+                              │
+                              ▼
+                     Merged Response[]
+```
+
+## Module Responsibilities
+
+### `core/`
+- **extractor.ts** — Main `createExtractor()` factory; orchestrates the full pipeline
+- **types.ts** — All shared TypeScript interfaces and types
+
+### `providers/`
+- **base.ts** — `LLMProvider` interface and `ProviderFactory` type
+- **openai.ts** — OpenAI vision API integration
+- **anthropic.ts** — Anthropic vision API integration
+- **ollama.ts** — Ollama local model REST API integration
+
+### `adapters/`
+- **base.ts** — `FormAdapter` interface
+- **surveyjs.ts** — SurveyJS JSON → prompt + schema conversion
+- **json-schema.ts** — Standard JSON Schema → prompt + schema conversion
+
+### `utils/`
+- **image.ts** — Image loading, base64 conversion, preprocessing
+- **qr.ts** — QR code / barcode / text-based unique ID detection
+- **merging.ts** — Online + paper response merging with conflict resolution
+
+## Key Design Decisions
+
+### 1. Optional Peer Dependencies
+Heavy dependencies (OpenAI SDK, Anthropic SDK, sharp) are optional peer deps. Users install only what they need.
+
+### 2. Adapter Pattern
+Form definitions are decoupled from the extraction logic via adapters. The SurveyJS adapter is the primary focus, but the architecture supports any JSON form definition.
+
+### 3. Provider Abstraction
+All LLM providers implement a common `LLMProvider` interface. This makes it trivial to add new providers without changing core logic.
+
+### 4. Zod for Validation
+LLM outputs are validated against Zod schemas generated by adapters. This catches malformed responses and enables retry logic.
+
+### 5. Confidence Scoring
+Every extracted field gets a confidence score (0-1). Fields below the threshold are flagged for human review.
+
+## Error Handling Strategy
+
+| Error Type | Handling |
+|-----------|----------|
+| LLM returns invalid JSON | Retry with stricter prompt (up to maxRetries) |
+| LLM returns wrong schema | Zod validation catches it; retry |
+| Image cannot be loaded | Throw descriptive error with input type info |
+| QR detection fails | Return `uniqueId: null`; use `uniqueIdHint` fallback |
+| Provider API error (rate limit, auth) | Throw with provider-specific error message |
+| Sharp not installed | Skip preprocessing; use raw image |
