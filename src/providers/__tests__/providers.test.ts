@@ -196,6 +196,22 @@ describe('Anthropic provider', () => {
     const result = await provider.extractFromImage({ image: fakeImage, prompt: fakePrompt });
     expect(result.content).toBe('{"a":1}');
   });
+
+  it('parses data URLs with extra parameters', async () => {
+    mockAnthropicCreate.mockResolvedValue({
+      content: [{ type: 'text', text: '{}' }],
+      usage: { input_tokens: 10, output_tokens: 5 },
+    });
+
+    const provider = anthropic('claude-4-sonnet');
+    const dataUrl = 'data:image/jpeg;charset=utf-8;base64,/9j/4AAQ';
+    const result = await provider.extractFromImage({ image: dataUrl, prompt: fakePrompt });
+    expect(result.content).toBe('{}');
+
+    const call = mockAnthropicCreate.mock.calls[0][0];
+    expect(call.messages[0].content[0].source.media_type).toBe('image/jpeg');
+    expect(call.messages[0].content[0].source.data).toBe('/9j/4AAQ');
+  });
 });
 
 // ── Ollama Provider ────────────────────────────────────────────────────
@@ -258,6 +274,35 @@ describe('Ollama provider', () => {
 
     const [url] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(url).toBe('http://myhost:9999/api/chat');
+  });
+
+  it('strips trailing slash from OLLAMA_BASE_URL', async () => {
+    process.env.OLLAMA_BASE_URL = 'http://myhost:9999/';
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ message: { content: '{}' } }),
+    }) as unknown as typeof fetch;
+
+    const provider = ollama('llama-3.2-vision');
+    await provider.extractFromImage({ image: fakeImage, prompt: fakePrompt });
+
+    const [url] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toBe('http://myhost:9999/api/chat');
+  });
+
+  it('parses data URLs with extra parameters', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ message: { content: '{}' } }),
+    }) as unknown as typeof fetch;
+
+    const dataUrl = 'data:image/png;charset=utf-8;base64,iVBORw0KGgo';
+    const provider = ollama('llama-3.2-vision');
+    await provider.extractFromImage({ image: dataUrl, prompt: fakePrompt });
+
+    const [, options] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(options.body as string);
+    expect(body.messages[0].images[0]).toBe('iVBORw0KGgo');
   });
 
   it('handles connection errors gracefully', async () => {

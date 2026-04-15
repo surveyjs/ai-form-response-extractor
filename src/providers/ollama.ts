@@ -3,7 +3,7 @@ import type { ImageInput } from '../core/types';
 
 function toBase64String(image: ImageInput): string {
   if (typeof image === 'string') {
-    const match = image.match(/^data:[^;]+;base64,(.+)$/);
+    const match = image.match(/^data:[^;,]+[^,]*;base64,(.+)$/);
     if (match) {
       return match[1];
     }
@@ -27,7 +27,7 @@ export const ollama: ProviderFactory = (model = 'llama-3.2-vision', _options = {
     name: 'ollama',
     model,
     async extractFromImage(params): Promise<LLMResponse> {
-      const baseUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+      const baseUrl = (process.env.OLLAMA_BASE_URL || 'http://localhost:11434').replace(/\/+$/, '');
       const url = `${baseUrl}/api/chat`;
       const imageBase64 = toBase64String(params.image);
 

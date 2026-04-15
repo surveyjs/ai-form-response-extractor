@@ -1,11 +1,18 @@
 import type { LLMProvider, LLMResponse, ProviderFactory } from './base';
 import type { ImageInput } from '../core/types';
 
-function toBase64(image: ImageInput): { data: string; mediaType: string } {
+type AnthropicMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+const SUPPORTED_MEDIA_TYPES = new Set<string>(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+
+function toBase64(image: ImageInput): { data: string; mediaType: AnthropicMediaType } {
   if (typeof image === 'string') {
-    const match = image.match(/^data:(image\/[^;]+);base64,(.+)$/);
+    const match = image.match(/^data:([^;,]+)[^,]*;base64,(.+)$/);
     if (match) {
-      return { data: match[2], mediaType: match[1] };
+      const mediaType = match[1];
+      if (!SUPPORTED_MEDIA_TYPES.has(mediaType)) {
+        throw new Error(`Unsupported media type "${mediaType}". Anthropic supports: ${[...SUPPORTED_MEDIA_TYPES].join(', ')}`);
+      }
+      return { data: match[2], mediaType: mediaType as AnthropicMediaType };
     }
     throw new Error('Anthropic provider requires a base64 data URL, Buffer, or Uint8Array. HTTP URLs and file paths are not supported directly.');
   }
@@ -53,7 +60,7 @@ export const anthropic: ProviderFactory = (model = 'claude-4-sonnet', _options =
               content: [
                 {
                   type: 'image',
-                  source: { type: 'base64', media_type: mediaType as 'image/png', data },
+                  source: { type: 'base64', media_type: mediaType, data },
                 },
                 { type: 'text', text: params.prompt },
               ],
