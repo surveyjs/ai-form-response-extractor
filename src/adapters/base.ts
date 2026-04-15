@@ -1,3 +1,5 @@
+import type { ZodType } from 'zod';
+
 /**
  * Common interface for form adapters.
  * Adapters convert a form definition into an LLM-friendly prompt.
@@ -12,7 +14,7 @@ export interface FormAdapter {
   toPrompt(formDefinition: Record<string, unknown>): string;
 
   /**
-   * Return a Zod-compatible schema description for validating LLM output.
+   * Return a Zod schema for validating LLM output.
    */
-  toOutputSchema(formDefinition: Record<string, unknown>): Record<string, unknown>;
+  toOutputSchema(formDefinition: Record<string, unknown>): ZodType;
 }
