@@ -101,6 +101,10 @@ const merged = mergeResponses(onlineResponses, paperExtractions);
 | `ANTHROPIC_API_KEY` | Anthropic API key |
 | `OLLAMA_BASE_URL` | Ollama server URL (default: `http://localhost:11434`) |
 
+## Demo
+
+See the [hybrid-form-ai-demo](https://github.com/surveyjs/hybrid-form-ai-demo) repository for a full working demo.
+
 ## Documentation
 
 - [SPEC.md](./SPEC.md) — Full project specification
