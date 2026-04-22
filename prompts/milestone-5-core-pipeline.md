@@ -29,7 +29,7 @@ Wire up the full end-to-end extraction pipeline in `createExtractor()`.
    - Build a system prompt that instructs the LLM:
      - "You are a document data extraction assistant"
      - "Extract field values from the scanned form image"
-     - "Return valid JSON only, matching the specified field names exactly"
+       - "Return valid JSON only, using canonical schema keys/values (`name`/`value`)"
      - "For each field, include your confidence (0.0-1.0) in a parallel `_confidence` object"
      - "If a field is not visible or unreadable, use null"
 
@@ -41,18 +41,22 @@ Wire up the full end-to-end extraction pipeline in `createExtractor()`.
    - Parse the LLM response content as JSON
    - If parsing fails, throw a descriptive error (will be caught by retry logic)
 
-6. **Validate with Zod**
+6. **Normalize Adapter-Specific Keys/Values**
+   - If adapter provides normalization logic, normalize parsed data before schema validation
+   - Accept label-based output from OCR/LLM and map to canonical schema keys/values (for example `title`/`text` -> `name`/`value`)
+
+7. **Validate with Zod**
    - Get the Zod schema from `adapter.toOutputSchema(input.formDefinition)`
    - Validate the parsed data against the schema
    - If validation fails, throw (will be caught by retry logic)
 
-7. **Compute Confidence Scores**
+8. **Compute Confidence Scores**
    - If the LLM returned a `_confidence` object, use those values
    - Otherwise: 1.0 for non-null present fields, 0.0 for null/missing fields
    - Flag fields below `options.confidenceThreshold` (default: 0.75)
    - Build the `FieldConfidence[]` array
 
-8. **Return ExtractionResult**
+9. **Return ExtractionResult**
    - `data`: the validated field values (without `_confidence`)
    - `uniqueId`: detected ID or null
    - `confidence`: per-field confidence array
@@ -60,7 +64,7 @@ Wire up the full end-to-end extraction pipeline in `createExtractor()`.
    - `usage`: token counts and estimated cost (if `logCosts` is true)
 
 ### Retry Logic
-- Wrap steps 4-7 in a retry loop
+- Wrap steps 4-8 in a retry loop
 - On JSON parse failure or Zod validation failure:
   - Append to the prompt: "Your previous response was invalid: {error}. Please return valid JSON."
   - Retry up to `options.maxRetries` times (default: 2)

@@ -42,9 +42,20 @@ Implement SurveyJS and JSON Schema adapters that convert form definitions into L
   - `paneldynamic` — dynamic list of panels with repeated elements (similar to matrixdynamic but presented as repeated panel sections rather than a table grid)
 - The prompt should instruct the LLM to return a JSON object with field names as keys
 - Include clear instructions about expected value formats per type
+- Clarify canonical output expectations in the prompt and schema notes:
+  - Use question `name` as the canonical key even when the form shows a `title`
+  - For `multipletext`, use item `name` keys even if extracted labels use item `title`
+  - For matrix types, use canonical row `value` and column `name` (or `value` fallback)
+  - For ItemValue arrays (`choices`, `rows`), map display `text` back to canonical `value`
 
 **`toOutputSchema(formDefinition)` method:**
 - Return a Zod schema object matching the expected SurveyJS result shape
+- Apply normalization before validation so label-based OCR/LLM output is accepted and converted to canonical keys/values:
+  - question `title` -> question `name`
+  - `multipletext.items[].title` -> `multipletext.items[].name`
+  - matrix column `title`/`text` -> column `name` (or `value` fallback)
+  - matrix row `text` -> row `value`
+  - ItemValue `text` -> `value` for single and multi-choice results
 - Map SurveyJS question types to Zod types:
   - `text` → `z.string()` (or `z.number()` for inputType=number)
   - `comment` → `z.string()`

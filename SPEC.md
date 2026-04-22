@@ -84,6 +84,12 @@ console.log(result.data);               // Structured responses matching form sc
 ## 6. Adapters
 
 - **SurveyJS Adapter** (highest priority): Converts SurveyJS JSON into clear, descriptive prompts that include question titles, types, choices, and constraints.
+  It also normalizes extracted responses into canonical SurveyJS data keys/values before validation:
+  - Question keys: `title`/display label -> question `name`
+  - `multipletext` item keys: item `title` -> item `name`
+  - Matrix column keys: column `title`/`text` -> column `name` (or `value` when `name` is absent)
+  - Matrix row keys: row `text` -> row `value`
+  - Choice values for `radiogroup`, `dropdown`, `checkbox`, `tagbox`, `ranking`, `imagepicker`: display `text` -> canonical `value`
 - **JSON Schema Adapter**: Support for standard JSON Schema.
 - **Custom Adapter**: Simple interface for users to define their own mapping.
 
