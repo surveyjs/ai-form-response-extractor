@@ -74,6 +74,36 @@ const titleMappedSurveyDef = {
   ],
 };
 
+const matrixTitleMappedSurveyDef = {
+  pages: [
+    {
+      elements: [
+        {
+          type: 'matrixdynamic',
+          name: 'products',
+          title: 'Products',
+          isRequired: true,
+          columns: [
+            { name: 'product', title: 'Product Name' },
+            { name: 'qty', text: 'Quantity' },
+          ],
+        },
+        {
+          type: 'matrixdropdown',
+          name: 'schedule',
+          title: 'Schedule',
+          isRequired: true,
+          rows: [{ value: 'mon', text: 'Monday' }],
+          columns: [
+            { name: 'morning', title: 'Morning Shift' },
+            { name: 'evening', text: 'Evening Shift' },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
 const simpleJsonSchemaDef = {
   type: 'object',
   properties: {
@@ -259,6 +289,47 @@ describe('createExtractor', () => {
         contacts: {
           phone: '123-456-7890',
           fax: '555-1234',
+        },
+      });
+    });
+
+    it('normalizes matrixdynamic and matrixdropdown column title/text keys to names', async () => {
+      const provider = createMockProvider([
+        {
+          content: JSON.stringify({
+            products: [
+              { 'Product Name': 'Laptop', Quantity: 2 },
+            ],
+            schedule: {
+              mon: {
+                'Morning Shift': 'on-site',
+                'Evening Shift': 'remote',
+              },
+            },
+          }),
+        },
+      ]);
+
+      const extractor = createExtractor({
+        provider,
+        adapter: 'surveyjs',
+        options: { preprocessImage: false },
+      });
+
+      const result = await extractor.extractFromImage({
+        image: TINY_PNG,
+        formDefinition: matrixTitleMappedSurveyDef,
+      });
+
+      expect(result.data).toEqual({
+        products: [
+          { product: 'Laptop', qty: 2 },
+        ],
+        schedule: {
+          mon: {
+            morning: 'on-site',
+            evening: 'remote',
+          },
         },
       });
     });

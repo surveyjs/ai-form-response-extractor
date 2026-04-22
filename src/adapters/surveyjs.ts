@@ -11,6 +11,7 @@ interface SurveyChoice {
 interface SurveyColumn {
   value?: string | number;
   name?: string;
+  title?: string;
   text?: string;
   cellType?: string;
 }
@@ -103,10 +104,38 @@ function normalizeSurveyResponseByNameTitle(
 
   for (const el of elements) {
     if (el.type !== 'multipletext' || !el.items || el.items.length === 0) {
-      continue;
+      // Fall through to matrix normalization checks.
+    } else {
+      const current = normalizedRoot[el.name];
+      normalizedRoot[el.name] = mapNameTitleKeys(current, el.items);
     }
-    const current = normalizedRoot[el.name];
-    normalizedRoot[el.name] = mapNameTitleKeys(current, el.items);
+
+    if ((el.type === 'matrixdynamic' || el.type === 'matrixdropdown') && el.columns && el.columns.length > 0) {
+      const columnEntries = el.columns
+        .filter((col): col is SurveyColumn => typeof col !== 'string')
+        .map((col) => {
+          const columnName = col.name ?? String(col.value ?? '');
+          const columnTitle = col.title ?? col.text;
+          return { name: columnName, title: columnTitle };
+        })
+        .filter((entry) => entry.name.length > 0);
+
+      if (columnEntries.length > 0) {
+        const matrixValue = normalizedRoot[el.name];
+        if (el.type === 'matrixdynamic' && Array.isArray(matrixValue)) {
+          normalizedRoot[el.name] = matrixValue.map((row) => mapNameTitleKeys(row, columnEntries));
+        }
+
+        if (el.type === 'matrixdropdown' && matrixValue && typeof matrixValue === 'object' && !Array.isArray(matrixValue)) {
+          const rows = matrixValue as Record<string, unknown>;
+          const mappedRows: Record<string, unknown> = {};
+          for (const [rowKey, rowValue] of Object.entries(rows)) {
+            mappedRows[rowKey] = mapNameTitleKeys(rowValue, columnEntries);
+          }
+          normalizedRoot[el.name] = mappedRows;
+        }
+      }
+    }
   }
 
   return normalizedRoot;

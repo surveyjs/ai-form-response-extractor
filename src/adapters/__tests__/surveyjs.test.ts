@@ -697,4 +697,89 @@ describe('SurveyJSAdapter.toOutputSchema', () => {
       },
     });
   });
+
+  it('maps matrixdynamic column titles/text to column names', () => {
+    const form = {
+      pages: [{
+        name: 'page1',
+        elements: [
+          {
+            type: 'matrixdynamic',
+            name: 'products',
+            title: 'Products',
+            isRequired: true,
+            columns: [
+              { name: 'product', title: 'Product Name' },
+              { name: 'qty', text: 'Quantity' },
+            ],
+          },
+        ],
+      }],
+    };
+
+    const normalized = adapter.normalizeResponseData(form, {
+      products: [
+        { 'Product Name': 'Laptop', Quantity: 2 },
+      ],
+    });
+
+    const schema = adapter.toOutputSchema(form);
+    const result = schema.safeParse(normalized);
+
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      throw new Error('Expected matrixdynamic mapping to succeed');
+    }
+
+    expect(result.data).toEqual({
+      products: [{ product: 'Laptop', qty: 2 }],
+    });
+  });
+
+  it('maps matrixdropdown column titles/text to column names', () => {
+    const form = {
+      pages: [{
+        name: 'page1',
+        elements: [
+          {
+            type: 'matrixdropdown',
+            name: 'schedule',
+            title: 'Schedule',
+            isRequired: true,
+            rows: [{ value: 'mon', text: 'Monday' }],
+            columns: [
+              { name: 'morning', title: 'Morning Shift' },
+              { name: 'evening', text: 'Evening Shift' },
+            ],
+          },
+        ],
+      }],
+    };
+
+    const normalized = adapter.normalizeResponseData(form, {
+      schedule: {
+        mon: {
+          'Morning Shift': 'on-site',
+          'Evening Shift': 'remote',
+        },
+      },
+    });
+
+    const schema = adapter.toOutputSchema(form);
+    const result = schema.safeParse(normalized);
+
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      throw new Error('Expected matrixdropdown mapping to succeed');
+    }
+
+    expect(result.data).toEqual({
+      schedule: {
+        mon: {
+          morning: 'on-site',
+          evening: 'remote',
+        },
+      },
+    });
+  });
 });
