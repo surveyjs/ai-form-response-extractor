@@ -201,8 +201,18 @@ export function createExtractor(config: ExtractorConfig) {
             throw new Error(`Invalid JSON in LLM response: ${rawContent.slice(0, 200)}`);
           }
 
+          if (adapter.normalizeResponseData) {
+            parsed = adapter.normalizeResponseData(input.formDefinition, parsed);
+          }
+
           // Extract _confidence object before validation
-          const confidenceMap = (parsed._confidence ?? {}) as Record<string, number>;
+          let confidenceMap = (parsed._confidence ?? {}) as Record<string, number>;
+          if (adapter.normalizeResponseData && confidenceMap && typeof confidenceMap === 'object' && !Array.isArray(confidenceMap)) {
+            confidenceMap = adapter.normalizeResponseData(
+              input.formDefinition,
+              confidenceMap as Record<string, unknown>,
+            ) as Record<string, number>;
+          }
           const dataWithoutConfidence = { ...parsed };
           delete dataWithoutConfidence._confidence;
 

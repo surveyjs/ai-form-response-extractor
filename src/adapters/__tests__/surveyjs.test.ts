@@ -590,4 +590,371 @@ describe('SurveyJSAdapter.toOutputSchema', () => {
     expect(schema.safeParse({ contacts: { phone: '123', fax: '456' } }).success).toBe(true);
     expect(schema.safeParse({ contacts: '123' }).success).toBe(false);
   });
+
+  it('maps multipletext item titles to item names in parsed output', () => {
+    const form = {
+      pages: [{
+        name: 'page1',
+        elements: [
+          {
+            type: 'multipletext',
+            name: 'contacts',
+            title: 'Contacts',
+            isRequired: true,
+            items: [
+              { name: 'phone', title: 'Phone Number' },
+              { name: 'fax', title: 'Fax Number' },
+            ],
+          },
+        ],
+      }],
+    };
+
+    const schema = adapter.toOutputSchema(form);
+    const result = schema.safeParse({
+      contacts: {
+        'Phone Number': '123',
+        'Fax Number': '456',
+      },
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      throw new Error('Expected multipletext parsing to succeed');
+    }
+
+    expect(result.data.contacts).toEqual({ phone: '123', fax: '456' });
+  });
+
+  it('keeps multipletext parsing resilient when extra keys are present', () => {
+    const form = {
+      pages: [{
+        name: 'page1',
+        elements: [
+          {
+            type: 'multipletext',
+            name: 'contacts',
+            title: 'Contacts',
+            isRequired: true,
+            items: [
+              { name: 'phone', title: 'Phone Number' },
+              { name: 'fax', title: 'Fax Number' },
+            ],
+          },
+        ],
+      }],
+    };
+
+    const schema = adapter.toOutputSchema(form);
+    const result = schema.safeParse({
+      contacts: {
+        'Phone Number': '123',
+        'Fax Number': '456',
+        noisyArtifact: 'ignore-me',
+      },
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      throw new Error('Expected multipletext parsing with extra keys to succeed');
+    }
+
+    expect(result.data.contacts.phone).toBe('123');
+    expect(result.data.contacts.fax).toBe('456');
+  });
+
+  it('maps question titles to question names in parsed output', () => {
+    const form = {
+      pages: [{
+        name: 'page1',
+        elements: [
+          { type: 'text', name: 'firstName', title: 'First Name', isRequired: true },
+          { type: 'text', name: 'lastName', title: 'Last Name', isRequired: true },
+        ],
+      }],
+    };
+
+    const normalized = adapter.normalizeResponseData(form, {
+      'First Name': 'John',
+      'Last Name': 'Doe',
+    });
+
+    const schema = adapter.toOutputSchema(form);
+    const result = schema.safeParse(normalized);
+
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      throw new Error('Expected question title mapping to succeed');
+    }
+
+    expect(result.data).toEqual({ firstName: 'John', lastName: 'Doe' });
+  });
+
+  it('maps both question titles and multipletext item titles to names', () => {
+    const form = {
+      pages: [{
+        name: 'page1',
+        elements: [
+          { type: 'text', name: 'firstName', title: 'First Name', isRequired: true },
+          {
+            type: 'multipletext',
+            name: 'contacts',
+            title: 'Contact Information',
+            isRequired: true,
+            items: [
+              { name: 'phone', title: 'Phone Number' },
+              { name: 'fax', title: 'Fax Number' },
+            ],
+          },
+        ],
+      }],
+    };
+
+    const normalized = adapter.normalizeResponseData(form, {
+      'First Name': 'John',
+      'Contact Information': {
+        'Phone Number': '123',
+        'Fax Number': '456',
+      },
+    });
+
+    const schema = adapter.toOutputSchema(form);
+    const result = schema.safeParse(normalized);
+
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      throw new Error('Expected combined title mapping to succeed');
+    }
+
+    expect(result.data).toEqual({
+      firstName: 'John',
+      contacts: {
+        phone: '123',
+        fax: '456',
+      },
+    });
+  });
+
+  it('maps matrixdynamic column titles/text to column names', () => {
+    const form = {
+      pages: [{
+        name: 'page1',
+        elements: [
+          {
+            type: 'matrixdynamic',
+            name: 'products',
+            title: 'Products',
+            isRequired: true,
+            columns: [
+              { name: 'product', title: 'Product Name' },
+              { name: 'qty', text: 'Quantity' },
+            ],
+          },
+        ],
+      }],
+    };
+
+    const normalized = adapter.normalizeResponseData(form, {
+      products: [
+        { 'Product Name': 'Laptop', Quantity: 2 },
+      ],
+    });
+
+    const schema = adapter.toOutputSchema(form);
+    const result = schema.safeParse(normalized);
+
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      throw new Error('Expected matrixdynamic mapping to succeed');
+    }
+
+    expect(result.data).toEqual({
+      products: [{ product: 'Laptop', qty: 2 }],
+    });
+  });
+
+  it('maps matrixdropdown column titles/text to column names', () => {
+    const form = {
+      pages: [{
+        name: 'page1',
+        elements: [
+          {
+            type: 'matrixdropdown',
+            name: 'schedule',
+            title: 'Schedule',
+            isRequired: true,
+            rows: [{ value: 'mon', text: 'Monday' }],
+            columns: [
+              { name: 'morning', title: 'Morning Shift' },
+              { name: 'evening', text: 'Evening Shift' },
+            ],
+          },
+        ],
+      }],
+    };
+
+    const normalized = adapter.normalizeResponseData(form, {
+      schedule: {
+        mon: {
+          'Morning Shift': 'on-site',
+          'Evening Shift': 'remote',
+        },
+      },
+    });
+
+    const schema = adapter.toOutputSchema(form);
+    const result = schema.safeParse(normalized);
+
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      throw new Error('Expected matrixdropdown mapping to succeed');
+    }
+
+    expect(result.data).toEqual({
+      schedule: {
+        mon: {
+          morning: 'on-site',
+          evening: 'remote',
+        },
+      },
+    });
+  });
+
+  it('maps choice text to choice value for single and multiple choice questions', () => {
+    const form = {
+      pages: [{
+        name: 'page1',
+        elements: [
+          {
+            type: 'radiogroup',
+            name: 'color',
+            title: 'Color',
+            isRequired: true,
+            choices: [
+              { value: 'red', text: 'Red Color' },
+              { value: 'green', text: 'Green Color' },
+            ],
+          },
+          {
+            type: 'checkbox',
+            name: 'features',
+            title: 'Features',
+            isRequired: true,
+            choices: [
+              { value: 'speed', text: 'Fast Speed' },
+              { value: 'secure', text: 'Strong Security' },
+            ],
+          },
+        ],
+      }],
+    };
+
+    const normalized = adapter.normalizeResponseData(form, {
+      color: 'Red Color',
+      features: ['Fast Speed', 'Strong Security'],
+    });
+
+    const schema = adapter.toOutputSchema(form);
+    const result = schema.safeParse(normalized);
+
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      throw new Error('Expected choice text mapping to succeed');
+    }
+
+    expect(result.data).toEqual({
+      color: 'red',
+      features: ['speed', 'secure'],
+    });
+  });
+
+  it('maps matrix row text and matrix selected column text to values', () => {
+    const form = {
+      pages: [{
+        name: 'page1',
+        elements: [
+          {
+            type: 'matrix',
+            name: 'quality',
+            title: 'Quality',
+            isRequired: true,
+            rows: [
+              { value: 'speed', text: 'Speed' },
+              { value: 'reliability', text: 'Reliability' },
+            ],
+            columns: [
+              { value: 'poor', text: 'Poor' },
+              { value: 'good', text: 'Good' },
+            ],
+          },
+        ],
+      }],
+    };
+
+    const normalized = adapter.normalizeResponseData(form, {
+      quality: {
+        Speed: 'Good',
+        Reliability: 'Poor',
+      },
+    });
+
+    const schema = adapter.toOutputSchema(form);
+    const result = schema.safeParse(normalized);
+
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      throw new Error('Expected matrix row and value mapping to succeed');
+    }
+
+    expect(result.data).toEqual({
+      quality: {
+        speed: 'good',
+        reliability: 'poor',
+      },
+    });
+  });
+
+  it('maps matrixdropdown row text to row values', () => {
+    const form = {
+      pages: [{
+        name: 'page1',
+        elements: [
+          {
+            type: 'matrixdropdown',
+            name: 'schedule',
+            title: 'Schedule',
+            isRequired: true,
+            rows: [{ value: 'mon', text: 'Monday' }],
+            columns: [
+              { name: 'morning', title: 'Morning Shift' },
+            ],
+          },
+        ],
+      }],
+    };
+
+    const normalized = adapter.normalizeResponseData(form, {
+      schedule: {
+        Monday: {
+          'Morning Shift': 'on-site',
+        },
+      },
+    });
+
+    const schema = adapter.toOutputSchema(form);
+    const result = schema.safeParse(normalized);
+
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      throw new Error('Expected matrixdropdown row mapping to succeed');
+    }
+
+    expect(result.data).toEqual({
+      schedule: {
+        mon: {
+          morning: 'on-site',
+        },
+      },
+    });
+  });
 });

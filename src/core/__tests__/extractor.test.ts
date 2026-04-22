@@ -35,6 +35,126 @@ const simpleSurveyDef = {
   ],
 };
 
+const multipleTextSurveyDef = {
+  pages: [
+    {
+      elements: [
+        {
+          type: 'multipletext',
+          name: 'contacts',
+          title: 'Contacts',
+          isRequired: true,
+          items: [
+            { name: 'phone', title: 'Phone Number' },
+            { name: 'fax', title: 'Fax Number' },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
+const titleMappedSurveyDef = {
+  pages: [
+    {
+      elements: [
+        { type: 'text', name: 'firstName', title: 'First Name', isRequired: true },
+        {
+          type: 'multipletext',
+          name: 'contacts',
+          title: 'Contact Information',
+          isRequired: true,
+          items: [
+            { name: 'phone', title: 'Phone Number' },
+            { name: 'fax', title: 'Fax Number' },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
+const matrixTitleMappedSurveyDef = {
+  pages: [
+    {
+      elements: [
+        {
+          type: 'matrixdynamic',
+          name: 'products',
+          title: 'Products',
+          isRequired: true,
+          columns: [
+            { name: 'product', title: 'Product Name' },
+            { name: 'qty', text: 'Quantity' },
+          ],
+        },
+        {
+          type: 'matrixdropdown',
+          name: 'schedule',
+          title: 'Schedule',
+          isRequired: true,
+          rows: [{ value: 'mon', text: 'Monday' }],
+          columns: [
+            { name: 'morning', title: 'Morning Shift' },
+            { name: 'evening', text: 'Evening Shift' },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
+const itemValueTextMappedSurveyDef = {
+  pages: [
+    {
+      elements: [
+        {
+          type: 'radiogroup',
+          name: 'color',
+          title: 'Color',
+          isRequired: true,
+          choices: [
+            { value: 'red', text: 'Red Color' },
+            { value: 'green', text: 'Green Color' },
+          ],
+        },
+        {
+          type: 'checkbox',
+          name: 'features',
+          title: 'Features',
+          isRequired: true,
+          choices: [
+            { value: 'speed', text: 'Fast Speed' },
+            { value: 'secure', text: 'Strong Security' },
+          ],
+        },
+        {
+          type: 'matrix',
+          name: 'quality',
+          title: 'Quality',
+          isRequired: true,
+          rows: [
+            { value: 'speed', text: 'Speed' },
+            { value: 'reliability', text: 'Reliability' },
+          ],
+          columns: [
+            { value: 'poor', text: 'Poor' },
+            { value: 'good', text: 'Good' },
+          ],
+        },
+        {
+          type: 'matrixdropdown',
+          name: 'schedule',
+          title: 'Schedule',
+          isRequired: true,
+          rows: [{ value: 'mon', text: 'Monday' }],
+          columns: [{ name: 'morning', title: 'Morning Shift' }],
+        },
+      ],
+    },
+  ],
+};
+
 const simpleJsonSchemaDef = {
   type: 'object',
   properties: {
@@ -158,6 +278,156 @@ describe('createExtractor', () => {
       });
 
       expect(result.data).toEqual({ value: 'hello' });
+    });
+
+    it('normalizes multipletext title keys to item name keys', async () => {
+      const provider = createMockProvider([
+        {
+          content: JSON.stringify({
+            contacts: {
+              'Phone Number': '123-456-7890',
+              'Fax Number': '555-1234',
+            },
+          }),
+        },
+      ]);
+
+      const extractor = createExtractor({
+        provider,
+        adapter: 'surveyjs',
+        options: { preprocessImage: false },
+      });
+
+      const result = await extractor.extractFromImage({
+        image: TINY_PNG,
+        formDefinition: multipleTextSurveyDef,
+      });
+
+      expect(result.data).toEqual({
+        contacts: {
+          phone: '123-456-7890',
+          fax: '555-1234',
+        },
+      });
+    });
+
+    it('normalizes question title keys and multipletext item title keys to names', async () => {
+      const provider = createMockProvider([
+        {
+          content: JSON.stringify({
+            'First Name': 'John',
+            'Contact Information': {
+              'Phone Number': '123-456-7890',
+              'Fax Number': '555-1234',
+            },
+          }),
+        },
+      ]);
+
+      const extractor = createExtractor({
+        provider,
+        adapter: 'surveyjs',
+        options: { preprocessImage: false },
+      });
+
+      const result = await extractor.extractFromImage({
+        image: TINY_PNG,
+        formDefinition: titleMappedSurveyDef,
+      });
+
+      expect(result.data).toEqual({
+        firstName: 'John',
+        contacts: {
+          phone: '123-456-7890',
+          fax: '555-1234',
+        },
+      });
+    });
+
+    it('normalizes matrixdynamic and matrixdropdown column title/text keys to names', async () => {
+      const provider = createMockProvider([
+        {
+          content: JSON.stringify({
+            products: [
+              { 'Product Name': 'Laptop', Quantity: 2 },
+            ],
+            schedule: {
+              mon: {
+                'Morning Shift': 'on-site',
+                'Evening Shift': 'remote',
+              },
+            },
+          }),
+        },
+      ]);
+
+      const extractor = createExtractor({
+        provider,
+        adapter: 'surveyjs',
+        options: { preprocessImage: false },
+      });
+
+      const result = await extractor.extractFromImage({
+        image: TINY_PNG,
+        formDefinition: matrixTitleMappedSurveyDef,
+      });
+
+      expect(result.data).toEqual({
+        products: [
+          { product: 'Laptop', qty: 2 },
+        ],
+        schedule: {
+          mon: {
+            morning: 'on-site',
+            evening: 'remote',
+          },
+        },
+      });
+    });
+
+    it('normalizes ItemValue text labels in choices and rows to values', async () => {
+      const provider = createMockProvider([
+        {
+          content: JSON.stringify({
+            color: 'Red Color',
+            features: ['Fast Speed', 'Strong Security'],
+            quality: {
+              Speed: 'Good',
+              Reliability: 'Poor',
+            },
+            schedule: {
+              Monday: {
+                'Morning Shift': 'on-site',
+              },
+            },
+          }),
+        },
+      ]);
+
+      const extractor = createExtractor({
+        provider,
+        adapter: 'surveyjs',
+        options: { preprocessImage: false },
+      });
+
+      const result = await extractor.extractFromImage({
+        image: TINY_PNG,
+        formDefinition: itemValueTextMappedSurveyDef,
+      });
+
+      expect(result.data).toEqual({
+        color: 'red',
+        features: ['speed', 'secure'],
+        quality: {
+          speed: 'good',
+          reliability: 'poor',
+        },
+        schedule: {
+          mon: {
+            morning: 'on-site',
+          },
+        },
+      });
     });
   });
 
@@ -441,6 +711,39 @@ describe('createExtractor', () => {
 
       const emailConf = result.confidence.find(c => c.fieldName === 'email');
       expect(emailConf?.confidence).toBe(0.8);
+      expect(emailConf?.flagged).toBe(false);
+    });
+
+    it('normalizes _confidence keys provided as question titles', async () => {
+      const responseData = {
+        'First Name': 'John',
+        'Last Name': 'Doe',
+        Email: 'john@test.com',
+        _confidence: { 'First Name': 0.91, 'Last Name': 0.62, Email: 0.83 },
+      };
+      const provider = createMockProvider([{ content: JSON.stringify(responseData) }]);
+
+      const extractor = createExtractor({
+        provider,
+        adapter: 'surveyjs',
+        options: { preprocessImage: false, confidenceThreshold: 0.75 },
+      });
+
+      const result = await extractor.extractFromImage({
+        image: TINY_PNG,
+        formDefinition: simpleSurveyDef,
+      });
+
+      const firstNameConf = result.confidence.find(c => c.fieldName === 'firstName');
+      expect(firstNameConf?.confidence).toBe(0.91);
+      expect(firstNameConf?.flagged).toBe(false);
+
+      const lastNameConf = result.confidence.find(c => c.fieldName === 'lastName');
+      expect(lastNameConf?.confidence).toBe(0.62);
+      expect(lastNameConf?.flagged).toBe(true);
+
+      const emailConf = result.confidence.find(c => c.fieldName === 'email');
+      expect(emailConf?.confidence).toBe(0.83);
       expect(emailConf?.flagged).toBe(false);
     });
 
