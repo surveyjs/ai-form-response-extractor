@@ -104,6 +104,57 @@ const matrixTitleMappedSurveyDef = {
   ],
 };
 
+const itemValueTextMappedSurveyDef = {
+  pages: [
+    {
+      elements: [
+        {
+          type: 'radiogroup',
+          name: 'color',
+          title: 'Color',
+          isRequired: true,
+          choices: [
+            { value: 'red', text: 'Red Color' },
+            { value: 'green', text: 'Green Color' },
+          ],
+        },
+        {
+          type: 'checkbox',
+          name: 'features',
+          title: 'Features',
+          isRequired: true,
+          choices: [
+            { value: 'speed', text: 'Fast Speed' },
+            { value: 'secure', text: 'Strong Security' },
+          ],
+        },
+        {
+          type: 'matrix',
+          name: 'quality',
+          title: 'Quality',
+          isRequired: true,
+          rows: [
+            { value: 'speed', text: 'Speed' },
+            { value: 'reliability', text: 'Reliability' },
+          ],
+          columns: [
+            { value: 'poor', text: 'Poor' },
+            { value: 'good', text: 'Good' },
+          ],
+        },
+        {
+          type: 'matrixdropdown',
+          name: 'schedule',
+          title: 'Schedule',
+          isRequired: true,
+          rows: [{ value: 'mon', text: 'Monday' }],
+          columns: [{ name: 'morning', title: 'Morning Shift' }],
+        },
+      ],
+    },
+  ],
+};
+
 const simpleJsonSchemaDef = {
   type: 'object',
   properties: {
@@ -329,6 +380,51 @@ describe('createExtractor', () => {
           mon: {
             morning: 'on-site',
             evening: 'remote',
+          },
+        },
+      });
+    });
+
+    it('normalizes ItemValue text labels in choices and rows to values', async () => {
+      const provider = createMockProvider([
+        {
+          content: JSON.stringify({
+            color: 'Red Color',
+            features: ['Fast Speed', 'Strong Security'],
+            quality: {
+              Speed: 'Good',
+              Reliability: 'Poor',
+            },
+            schedule: {
+              Monday: {
+                'Morning Shift': 'on-site',
+              },
+            },
+          }),
+        },
+      ]);
+
+      const extractor = createExtractor({
+        provider,
+        adapter: 'surveyjs',
+        options: { preprocessImage: false },
+      });
+
+      const result = await extractor.extractFromImage({
+        image: TINY_PNG,
+        formDefinition: itemValueTextMappedSurveyDef,
+      });
+
+      expect(result.data).toEqual({
+        color: 'red',
+        features: ['speed', 'secure'],
+        quality: {
+          speed: 'good',
+          reliability: 'poor',
+        },
+        schedule: {
+          mon: {
+            morning: 'on-site',
           },
         },
       });

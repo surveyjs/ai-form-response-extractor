@@ -782,4 +782,142 @@ describe('SurveyJSAdapter.toOutputSchema', () => {
       },
     });
   });
+
+  it('maps choice text to choice value for single and multiple choice questions', () => {
+    const form = {
+      pages: [{
+        name: 'page1',
+        elements: [
+          {
+            type: 'radiogroup',
+            name: 'color',
+            title: 'Color',
+            isRequired: true,
+            choices: [
+              { value: 'red', text: 'Red Color' },
+              { value: 'green', text: 'Green Color' },
+            ],
+          },
+          {
+            type: 'checkbox',
+            name: 'features',
+            title: 'Features',
+            isRequired: true,
+            choices: [
+              { value: 'speed', text: 'Fast Speed' },
+              { value: 'secure', text: 'Strong Security' },
+            ],
+          },
+        ],
+      }],
+    };
+
+    const normalized = adapter.normalizeResponseData(form, {
+      color: 'Red Color',
+      features: ['Fast Speed', 'Strong Security'],
+    });
+
+    const schema = adapter.toOutputSchema(form);
+    const result = schema.safeParse(normalized);
+
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      throw new Error('Expected choice text mapping to succeed');
+    }
+
+    expect(result.data).toEqual({
+      color: 'red',
+      features: ['speed', 'secure'],
+    });
+  });
+
+  it('maps matrix row text and matrix selected column text to values', () => {
+    const form = {
+      pages: [{
+        name: 'page1',
+        elements: [
+          {
+            type: 'matrix',
+            name: 'quality',
+            title: 'Quality',
+            isRequired: true,
+            rows: [
+              { value: 'speed', text: 'Speed' },
+              { value: 'reliability', text: 'Reliability' },
+            ],
+            columns: [
+              { value: 'poor', text: 'Poor' },
+              { value: 'good', text: 'Good' },
+            ],
+          },
+        ],
+      }],
+    };
+
+    const normalized = adapter.normalizeResponseData(form, {
+      quality: {
+        Speed: 'Good',
+        Reliability: 'Poor',
+      },
+    });
+
+    const schema = adapter.toOutputSchema(form);
+    const result = schema.safeParse(normalized);
+
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      throw new Error('Expected matrix row and value mapping to succeed');
+    }
+
+    expect(result.data).toEqual({
+      quality: {
+        speed: 'good',
+        reliability: 'poor',
+      },
+    });
+  });
+
+  it('maps matrixdropdown row text to row values', () => {
+    const form = {
+      pages: [{
+        name: 'page1',
+        elements: [
+          {
+            type: 'matrixdropdown',
+            name: 'schedule',
+            title: 'Schedule',
+            isRequired: true,
+            rows: [{ value: 'mon', text: 'Monday' }],
+            columns: [
+              { name: 'morning', title: 'Morning Shift' },
+            ],
+          },
+        ],
+      }],
+    };
+
+    const normalized = adapter.normalizeResponseData(form, {
+      schedule: {
+        Monday: {
+          'Morning Shift': 'on-site',
+        },
+      },
+    });
+
+    const schema = adapter.toOutputSchema(form);
+    const result = schema.safeParse(normalized);
+
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      throw new Error('Expected matrixdropdown row mapping to succeed');
+    }
+
+    expect(result.data).toEqual({
+      schedule: {
+        mon: {
+          morning: 'on-site',
+        },
+      },
+    });
+  });
 });

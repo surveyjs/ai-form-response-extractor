@@ -52,14 +52,7 @@ function normalizeNameTitleKey(key: string): string {
   return key.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
-function mapNameTitleKeys(
-  value: unknown,
-  entries?: Array<{ name: string; title?: string }>,
-): unknown {
-  if (!value || typeof value !== 'object' || Array.isArray(value) || !entries || entries.length === 0) {
-    return value;
-  }
-
+function createNameTitleMap(entries: Array<{ name: string; title?: string }>): Map<string, string> {
   const keyMap = new Map<string, string>();
   for (const entry of entries) {
     keyMap.set(entry.name, entry.name);
@@ -69,6 +62,63 @@ function mapNameTitleKeys(
       keyMap.set(normalizeNameTitleKey(entry.title), entry.name);
     }
   }
+  return keyMap;
+}
+
+function mapNameTitleScalar(
+  value: unknown,
+  entries?: Array<{ name: string; title?: string }>,
+): unknown {
+  if ((typeof value !== 'string' && typeof value !== 'number') || !entries || entries.length === 0) {
+    return value;
+  }
+
+  const keyMap = createNameTitleMap(entries);
+  const raw = String(value);
+  return keyMap.get(raw) ?? keyMap.get(normalizeNameTitleKey(raw)) ?? value;
+}
+
+function mapNameTitleArray(
+  value: unknown,
+  entries?: Array<{ name: string; title?: string }>,
+): unknown {
+  if (!Array.isArray(value) || !entries || entries.length === 0) {
+    return value;
+  }
+  return value.map((item) => mapNameTitleScalar(item, entries));
+}
+
+function itemValueEntries(
+  values?: Array<string | SurveyChoice | SurveyRow>,
+): Array<{ name: string; title?: string }> {
+  if (!values) return [];
+  return values.map((value) => {
+    if (typeof value === 'string') return { name: value };
+    return { name: String(value.value), title: value.text };
+  });
+}
+
+function columnEntries(columns?: Array<string | SurveyColumn>): Array<{ name: string; title?: string }> {
+  if (!columns) return [];
+  return columns
+    .filter((col): col is SurveyColumn => typeof col !== 'string')
+    .map((col) => {
+      const columnName = col.name ?? String(col.value ?? '');
+      const columnTitle = col.title ?? col.text;
+      return { name: columnName, title: columnTitle };
+    })
+    .filter((entry) => entry.name.length > 0);
+}
+
+function mapNameTitleKeys(
+  value: unknown,
+  entries?: Array<{ name: string; title?: string }>,
+): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !entries || entries.length === 0) {
+    return value;
+  }
+
+  const keyMap = createNameTitleMap(entries);
 
   const input = value as Record<string, unknown>;
   const normalized: Record<string, unknown> = {};
@@ -103,6 +153,16 @@ function normalizeSurveyResponseByNameTitle(
   const normalizedRoot = { ...(rootMapped as Record<string, unknown>) };
 
   for (const el of elements) {
+    const choiceEntries = itemValueEntries(el.choices);
+    if (choiceEntries.length > 0) {
+      if (el.type === 'radiogroup' || el.type === 'dropdown' || (el.type === 'imagepicker' && !el.multiSelect)) {
+        normalizedRoot[el.name] = mapNameTitleScalar(normalizedRoot[el.name], choiceEntries);
+      }
+      if (el.type === 'checkbox' || el.type === 'tagbox' || el.type === 'ranking' || (el.type === 'imagepicker' && el.multiSelect)) {
+        normalizedRoot[el.name] = mapNameTitleArray(normalizedRoot[el.name], choiceEntries);
+      }
+    }
+
     if (el.type !== 'multipletext' || !el.items || el.items.length === 0) {
       // Fall through to matrix normalization checks.
     } else {
@@ -110,27 +170,35 @@ function normalizeSurveyResponseByNameTitle(
       normalizedRoot[el.name] = mapNameTitleKeys(current, el.items);
     }
 
-    if ((el.type === 'matrixdynamic' || el.type === 'matrixdropdown') && el.columns && el.columns.length > 0) {
-      const columnEntries = el.columns
-        .filter((col): col is SurveyColumn => typeof col !== 'string')
-        .map((col) => {
-          const columnName = col.name ?? String(col.value ?? '');
-          const columnTitle = col.title ?? col.text;
-          return { name: columnName, title: columnTitle };
-        })
-        .filter((entry) => entry.name.length > 0);
+    const rowEntries = itemValueEntries(el.rows);
+    const matrixColumnEntries = columnEntries(el.columns);
 
-      if (columnEntries.length > 0) {
+    if (el.type === 'matrix') {
+      const matrixValue = normalizedRoot[el.name];
+      if (matrixValue && typeof matrixValue === 'object' && !Array.isArray(matrixValue)) {
+        const mappedRows = mapNameTitleKeys(matrixValue, rowEntries) as Record<string, unknown>;
+        const mappedValues: Record<string, unknown> = {};
+        for (const [rowKey, rowValue] of Object.entries(mappedRows)) {
+          mappedValues[rowKey] = matrixColumnEntries.length > 0
+            ? mapNameTitleScalar(rowValue, matrixColumnEntries)
+            : rowValue;
+        }
+        normalizedRoot[el.name] = mappedValues;
+      }
+    }
+
+    if ((el.type === 'matrixdynamic' || el.type === 'matrixdropdown') && el.columns && el.columns.length > 0) {
+      if (matrixColumnEntries.length > 0) {
         const matrixValue = normalizedRoot[el.name];
         if (el.type === 'matrixdynamic' && Array.isArray(matrixValue)) {
-          normalizedRoot[el.name] = matrixValue.map((row) => mapNameTitleKeys(row, columnEntries));
+          normalizedRoot[el.name] = matrixValue.map((row) => mapNameTitleKeys(row, matrixColumnEntries));
         }
 
         if (el.type === 'matrixdropdown' && matrixValue && typeof matrixValue === 'object' && !Array.isArray(matrixValue)) {
-          const rows = matrixValue as Record<string, unknown>;
+          const rows = mapNameTitleKeys(matrixValue, rowEntries) as Record<string, unknown>;
           const mappedRows: Record<string, unknown> = {};
           for (const [rowKey, rowValue] of Object.entries(rows)) {
-            mappedRows[rowKey] = mapNameTitleKeys(rowValue, columnEntries);
+            mappedRows[rowKey] = mapNameTitleKeys(rowValue, matrixColumnEntries);
           }
           normalizedRoot[el.name] = mappedRows;
         }
