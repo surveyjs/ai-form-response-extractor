@@ -714,6 +714,39 @@ describe('createExtractor', () => {
       expect(emailConf?.flagged).toBe(false);
     });
 
+    it('normalizes _confidence keys provided as question titles', async () => {
+      const responseData = {
+        'First Name': 'John',
+        'Last Name': 'Doe',
+        Email: 'john@test.com',
+        _confidence: { 'First Name': 0.91, 'Last Name': 0.62, Email: 0.83 },
+      };
+      const provider = createMockProvider([{ content: JSON.stringify(responseData) }]);
+
+      const extractor = createExtractor({
+        provider,
+        adapter: 'surveyjs',
+        options: { preprocessImage: false, confidenceThreshold: 0.75 },
+      });
+
+      const result = await extractor.extractFromImage({
+        image: TINY_PNG,
+        formDefinition: simpleSurveyDef,
+      });
+
+      const firstNameConf = result.confidence.find(c => c.fieldName === 'firstName');
+      expect(firstNameConf?.confidence).toBe(0.91);
+      expect(firstNameConf?.flagged).toBe(false);
+
+      const lastNameConf = result.confidence.find(c => c.fieldName === 'lastName');
+      expect(lastNameConf?.confidence).toBe(0.62);
+      expect(lastNameConf?.flagged).toBe(true);
+
+      const emailConf = result.confidence.find(c => c.fieldName === 'email');
+      expect(emailConf?.confidence).toBe(0.83);
+      expect(emailConf?.flagged).toBe(false);
+    });
+
     it('flags fields below custom confidence threshold', async () => {
       const responseData = {
         firstName: 'John',

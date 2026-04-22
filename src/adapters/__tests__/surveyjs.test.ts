@@ -626,6 +626,43 @@ describe('SurveyJSAdapter.toOutputSchema', () => {
     expect(result.data.contacts).toEqual({ phone: '123', fax: '456' });
   });
 
+  it('keeps multipletext parsing resilient when extra keys are present', () => {
+    const form = {
+      pages: [{
+        name: 'page1',
+        elements: [
+          {
+            type: 'multipletext',
+            name: 'contacts',
+            title: 'Contacts',
+            isRequired: true,
+            items: [
+              { name: 'phone', title: 'Phone Number' },
+              { name: 'fax', title: 'Fax Number' },
+            ],
+          },
+        ],
+      }],
+    };
+
+    const schema = adapter.toOutputSchema(form);
+    const result = schema.safeParse({
+      contacts: {
+        'Phone Number': '123',
+        'Fax Number': '456',
+        noisyArtifact: 'ignore-me',
+      },
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      throw new Error('Expected multipletext parsing with extra keys to succeed');
+    }
+
+    expect(result.data.contacts.phone).toBe('123');
+    expect(result.data.contacts.fax).toBe('456');
+  });
+
   it('maps question titles to question names in parsed output', () => {
     const form = {
       pages: [{

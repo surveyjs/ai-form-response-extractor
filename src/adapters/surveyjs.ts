@@ -450,7 +450,7 @@ function elementToZod(el: SurveyElement): z.ZodTypeAny | null {
         (value) => mapNameTitleKeys(value, el.items),
         z.object(
           Object.fromEntries(el.items.map((item) => [item.name, z.string().optional()]))
-        ).strict(),
+        ).passthrough(),
       );
     case 'ranking':
       return z.array(z.string());
