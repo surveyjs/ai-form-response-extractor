@@ -1019,4 +1019,62 @@ describe('SurveyJSAdapter.toOutputSchema', () => {
       },
     });
   });
+
+  it('normalizes signaturepad raw base64 by trimming whitespace', () => {
+    const form = {
+      pages: [{
+        name: 'page1',
+        elements: [
+          { type: 'signaturepad', name: 'customerSignature', title: 'Customer Signature', isRequired: true },
+        ],
+      }],
+    };
+
+    const normalized = adapter.normalizeResponseData(form, {
+      customerSignature: '  iVBORw0KGgoAAAANSUhEUgAAAAUA  ',
+    });
+
+    expect(normalized).toEqual({
+      customerSignature: 'iVBORw0KGgoAAAANSUhEUgAAAAUA',
+    });
+  });
+
+  it('keeps signaturepad jpeg-like base64 payload as raw base64', () => {
+    const form = {
+      pages: [{
+        name: 'page1',
+        elements: [
+          { type: 'signaturepad', name: 'customerSignature', title: 'Customer Signature', isRequired: true },
+        ],
+      }],
+    };
+
+    const normalized = adapter.normalizeResponseData(form, {
+      customerSignature: '/9J/4AAQSkZJRgABAQAAAQABAAD',
+    });
+
+    expect(normalized).toEqual({
+      customerSignature: '/9J/4AAQSkZJRgABAQAAAQABAAD',
+    });
+  });
+
+  it('strips signaturepad data URL prefix to raw base64', () => {
+    const form = {
+      pages: [{
+        name: 'page1',
+        elements: [
+          { type: 'signaturepad', name: 'customerSignature', title: 'Customer Signature', isRequired: true },
+        ],
+      }],
+    };
+
+    const existingDataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUA';
+    const normalized = adapter.normalizeResponseData(form, {
+      customerSignature: existingDataUrl,
+    });
+
+    expect(normalized).toEqual({
+      customerSignature: 'iVBORw0KGgoAAAANSUhEUgAAAAUA',
+    });
+  });
 });

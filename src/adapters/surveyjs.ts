@@ -139,6 +139,25 @@ function mapNameTitleKeys(
   return normalized;
 }
 
+function normalizeSignaturepadValue(value: unknown): unknown {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return trimmed;
+  }
+
+  // Normalized extractor output expects a raw base64 signature string.
+  if (trimmed.startsWith('data:image/')) {
+    const match = trimmed.match(/^data:image\/[^;]*;base64,(.+)$/);
+    return match ? match[1] : trimmed;
+  }
+
+  return trimmed;
+}
+
 function normalizeSurveyResponseByNameTitle(
   value: unknown,
   elements: SurveyElement[],
@@ -205,6 +224,10 @@ function normalizeSurveyResponseByNameTitle(
           normalizedRoot[el.name] = mappedRows;
         }
       }
+    }
+
+    if (el.type === 'signaturepad') {
+      normalizedRoot[el.name] = normalizeSignaturepadValue(normalizedRoot[el.name]);
     }
   }
 

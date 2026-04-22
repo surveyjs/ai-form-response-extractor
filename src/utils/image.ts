@@ -1,5 +1,5 @@
 import type { ImageInput } from '../core/types';
-import { composeImageBuffers, resolveToBuffer } from './resolve-buffer';
+import { resolveToBuffer } from './resolve-buffer';
 
 /**
  * Image preprocessing utilities.
