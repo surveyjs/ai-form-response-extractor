@@ -590,4 +590,39 @@ describe('SurveyJSAdapter.toOutputSchema', () => {
     expect(schema.safeParse({ contacts: { phone: '123', fax: '456' } }).success).toBe(true);
     expect(schema.safeParse({ contacts: '123' }).success).toBe(false);
   });
+
+  it('maps multipletext item titles to item names in parsed output', () => {
+    const form = {
+      pages: [{
+        name: 'page1',
+        elements: [
+          {
+            type: 'multipletext',
+            name: 'contacts',
+            title: 'Contacts',
+            isRequired: true,
+            items: [
+              { name: 'phone', title: 'Phone Number' },
+              { name: 'fax', title: 'Fax Number' },
+            ],
+          },
+        ],
+      }],
+    };
+
+    const schema = adapter.toOutputSchema(form);
+    const result = schema.safeParse({
+      contacts: {
+        'Phone Number': '123',
+        'Fax Number': '456',
+      },
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      throw new Error('Expected multipletext parsing to succeed');
+    }
+
+    expect(result.data.contacts).toEqual({ phone: '123', fax: '456' });
+  });
 });

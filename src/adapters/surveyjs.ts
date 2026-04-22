@@ -47,6 +47,42 @@ interface SurveyPage {
   elements?: SurveyElement[];
 }
 
+function normalizeMultipleTextItemKey(key: string): string {
+  return key.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function normalizeMultipleTextValue(
+  value: unknown,
+  items?: Array<{ name: string; title?: string }>,
+): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !items || items.length === 0) {
+    return value;
+  }
+
+  const keyMap = new Map<string, string>();
+  for (const item of items) {
+    keyMap.set(item.name, item.name);
+    keyMap.set(normalizeMultipleTextItemKey(item.name), item.name);
+    if (item.title) {
+      keyMap.set(item.title, item.name);
+      keyMap.set(normalizeMultipleTextItemKey(item.title), item.name);
+    }
+  }
+
+  const input = value as Record<string, unknown>;
+  const normalized: Record<string, unknown> = {};
+  for (const [rawKey, rawValue] of Object.entries(input)) {
+    const mapped = keyMap.get(rawKey) ?? keyMap.get(normalizeMultipleTextItemKey(rawKey));
+    if (mapped) {
+      normalized[mapped] = rawValue;
+    } else {
+      normalized[rawKey] = rawValue;
+    }
+  }
+
+  return normalized;
+}
+
 function choiceLabels(choices?: Array<string | SurveyChoice>): string[] {
   if (!choices) return [];
   return choices.map(c => {
@@ -280,7 +316,16 @@ function elementToZod(el: SurveyElement): z.ZodTypeAny | null {
     case 'matrixdropdown':
       return z.record(z.record(z.unknown()));
     case 'multipletext':
-      return z.record(z.string());
+      if (!el.items || el.items.length === 0) {
+        return z.record(z.string());
+      }
+
+      return z.preprocess(
+        (value) => normalizeMultipleTextValue(value, el.items),
+        z.object(
+          Object.fromEntries(el.items.map((item) => [item.name, z.string().optional()]))
+        ).strict(),
+      );
     case 'ranking':
       return z.array(z.string());
     case 'imagepicker':

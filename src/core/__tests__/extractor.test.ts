@@ -35,6 +35,25 @@ const simpleSurveyDef = {
   ],
 };
 
+const multipleTextSurveyDef = {
+  pages: [
+    {
+      elements: [
+        {
+          type: 'multipletext',
+          name: 'contacts',
+          title: 'Contacts',
+          isRequired: true,
+          items: [
+            { name: 'phone', title: 'Phone Number' },
+            { name: 'fax', title: 'Fax Number' },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
 const simpleJsonSchemaDef = {
   type: 'object',
   properties: {
@@ -158,6 +177,37 @@ describe('createExtractor', () => {
       });
 
       expect(result.data).toEqual({ value: 'hello' });
+    });
+
+    it('normalizes multipletext title keys to item name keys', async () => {
+      const provider = createMockProvider([
+        {
+          content: JSON.stringify({
+            contacts: {
+              'Phone Number': '123-456-7890',
+              'Fax Number': '555-1234',
+            },
+          }),
+        },
+      ]);
+
+      const extractor = createExtractor({
+        provider,
+        adapter: 'surveyjs',
+        options: { preprocessImage: false },
+      });
+
+      const result = await extractor.extractFromImage({
+        image: TINY_PNG,
+        formDefinition: multipleTextSurveyDef,
+      });
+
+      expect(result.data).toEqual({
+        contacts: {
+          phone: '123-456-7890',
+          fax: '555-1234',
+        },
+      });
     });
   });
 
