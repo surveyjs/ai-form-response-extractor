@@ -4,6 +4,25 @@ import type { ImageInput } from '../core/types';
 const FETCH_TIMEOUT_MS = 10_000;
 const MAX_FETCH_BYTES = 10 * 1024 * 1024; // 10 MB
 
+function decodeDataUrl(input: string): Buffer | null {
+  if (!input.startsWith('data:')) {
+    return null;
+  }
+
+  const commaIndex = input.indexOf(',');
+  if (commaIndex === -1) {
+    throw new Error('Invalid data URL input');
+  }
+
+  const header = input.slice(0, commaIndex);
+  const payload = input.slice(commaIndex + 1);
+  if (header.includes(';base64')) {
+    return Buffer.from(payload, 'base64');
+  }
+
+  return Buffer.from(decodeURIComponent(payload), 'utf8');
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function tryLoadSharp(): Promise<any> {
   try {
@@ -68,6 +87,11 @@ export async function resolveToBuffer(input: ImageInput): Promise<Buffer> {
   if (Buffer.isBuffer(input)) return input;
   if (input instanceof Uint8Array) return Buffer.from(input);
   if (typeof input === 'string') {
+    const dataUrlBuffer = decodeDataUrl(input);
+    if (dataUrlBuffer) {
+      return dataUrlBuffer;
+    }
+
     if (input.startsWith('http://') || input.startsWith('https://')) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
