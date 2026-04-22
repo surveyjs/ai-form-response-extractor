@@ -35,12 +35,76 @@ function resolveAdapter(config: ExtractorConfig): FormAdapter {
   }
 }
 
-const SYSTEM_PROMPT =
+const BASE_SYSTEM_PROMPT =
   'You are a document data extraction assistant. ' +
   'Extract field values from the scanned form image. ' +
   'Return valid JSON only, matching the specified field names exactly. ' +
   'For each field, include your confidence (0.0-1.0) in a parallel "_confidence" object. ' +
   'If a field is not visible or unreadable, use null.';
+
+interface FormElementLike {
+  type?: string;
+  name?: string;
+  title?: string;
+  elements?: FormElementLike[];
+  templateElements?: FormElementLike[];
+}
+
+interface SignatureFieldDescriptor {
+  name: string;
+  label: string;
+}
+
+function collectFormElements(elements: FormElementLike[] | undefined): FormElementLike[] {
+  if (!elements || elements.length === 0) return [];
+
+  const result: FormElementLike[] = [];
+  for (const el of elements) {
+    result.push(el);
+    if (el.elements && el.elements.length > 0) {
+      result.push(...collectFormElements(el.elements));
+    }
+    if (el.templateElements && el.templateElements.length > 0) {
+      result.push(...collectFormElements(el.templateElements));
+    }
+  }
+
+  return result;
+}
+
+function getSignaturePadFields(formDefinition: Record<string, unknown>): SignatureFieldDescriptor[] {
+  const pages = formDefinition.pages as Array<{ elements?: FormElementLike[] }> | undefined;
+  if (!pages || pages.length === 0) return [];
+
+  const fields: SignatureFieldDescriptor[] = [];
+  for (const page of pages) {
+    const elements = collectFormElements(page.elements);
+    for (const el of elements) {
+      if (el.type !== 'signaturepad' || !el.name) continue;
+      fields.push({ name: el.name, label: el.title ?? el.name });
+    }
+  }
+
+  return fields;
+}
+
+function buildSystemPrompt(formDefinition: Record<string, unknown>): string {
+  const signatureFields = getSignaturePadFields(formDefinition);
+  if (signatureFields.length === 0) {
+    return BASE_SYSTEM_PROMPT;
+  }
+
+  const fieldLabels = signatureFields
+    .map((f) => `"${f.name}" (label: "${f.label}")`)
+    .join(', ');
+
+  return (
+    BASE_SYSTEM_PROMPT +
+    ' For signaturepad fields, use field names and labels to identify the signature areas and extract the actual handwritten signature marks.' +
+    ' Return each signature as a Base64-encoded image string without markdown, code fences, or data URL prefixes.' +
+    ` Signature fields: ${fieldLabels}.`
+  );
+}
 
 /**
  * Extracts JSON content from an LLM response that may contain markdown
@@ -160,6 +224,7 @@ export function createExtractor(config: ExtractorConfig) {
       // 3. Generate prompt
       const fieldPrompt = adapter.toPrompt(input.formDefinition);
       const basePrompt = fieldPrompt;
+      const systemPrompt = buildSystemPrompt(input.formDefinition);
 
       // 4. Get output schema for validation
       const outputSchema = adapter.toOutputSchema(input.formDefinition);
@@ -177,7 +242,7 @@ export function createExtractor(config: ExtractorConfig) {
           const response = await provider.extractFromImage({
             image: imageBase64,
             prompt,
-            systemPrompt: SYSTEM_PROMPT,
+            systemPrompt,
           });
 
           const rawContent = response.content;

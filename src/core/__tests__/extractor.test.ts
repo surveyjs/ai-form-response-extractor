@@ -155,6 +155,21 @@ const itemValueTextMappedSurveyDef = {
   ],
 };
 
+const signaturePadSurveyDef = {
+  pages: [
+    {
+      elements: [
+        {
+          type: 'signaturepad',
+          name: 'customerSignature',
+          title: 'Customer Signature',
+          isRequired: true,
+        },
+      ],
+    },
+  ],
+};
+
 const simpleJsonSchemaDef = {
   type: 'object',
   properties: {
@@ -427,6 +442,32 @@ describe('createExtractor', () => {
             morning: 'on-site',
           },
         },
+      });
+    });
+
+    it('extracts signaturepad as base64 string value', async () => {
+      const base64Signature = 'iVBORw0KGgoAAAANSUhEUgAAAAUA';
+      const provider = createMockProvider([
+        {
+          content: JSON.stringify({
+            customerSignature: base64Signature,
+          }),
+        },
+      ]);
+
+      const extractor = createExtractor({
+        provider,
+        adapter: 'surveyjs',
+        options: { preprocessImage: false },
+      });
+
+      const result = await extractor.extractFromImage({
+        image: TINY_PNG,
+        formDefinition: signaturePadSurveyDef,
+      });
+
+      expect(result.data).toEqual({
+        customerSignature: base64Signature,
       });
     });
   });
@@ -922,6 +963,30 @@ describe('createExtractor', () => {
       expect(call.systemPrompt).toContain('document data extraction assistant');
       expect(call.systemPrompt).toContain('Return valid JSON only');
       expect(call.systemPrompt).toContain('_confidence');
+      expect(call.systemPrompt).not.toContain('signaturepad fields');
+    });
+
+    it('adds signaturepad-specific guidance with field names and labels', async () => {
+      const provider = createMockProvider([
+        { content: JSON.stringify({ customerSignature: 'iVBORw0KGgoAAAANSUhEUgAAAAUA' }) },
+      ]);
+
+      const extractor = createExtractor({
+        provider,
+        adapter: 'surveyjs',
+        options: { preprocessImage: false },
+      });
+
+      await extractor.extractFromImage({
+        image: TINY_PNG,
+        formDefinition: signaturePadSurveyDef,
+      });
+
+      const call = (provider.extractFromImage as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(call.systemPrompt).toContain('For signaturepad fields');
+      expect(call.systemPrompt).toContain('actual handwritten signature marks');
+      expect(call.systemPrompt).toContain('Base64-encoded image string');
+      expect(call.systemPrompt).toContain('"customerSignature" (label: "Customer Signature")');
     });
   });
 });
