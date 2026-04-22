@@ -20,7 +20,11 @@ vi.mock('@anthropic-ai/sdk', () => ({
 }));
 
 // ── Helpers ────────────────────────────────────────────────────────────
-const fakeImage = Buffer.from('fake-png-bytes');
+// Minimal valid 1×1 PNG — providers need real magic bytes for MIME detection
+const fakeImage = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+  'base64',
+);
 const fakePrompt = 'Extract form data';
 const fakeSystemPrompt = 'You are a form extractor.';
 
@@ -223,6 +227,27 @@ describe('Anthropic provider', () => {
 
     const call = mockAnthropicCreate.mock.calls[0][0];
     expect(call.max_tokens).toBe(8192);
+  });
+
+  it('detects correct media_type from JPEG buffer (not hardcoded png)', async () => {
+    mockAnthropicCreate.mockResolvedValue({
+      content: [{ type: 'text', text: '{}' }],
+      stop_reason: 'end_turn',
+      usage: { input_tokens: 10, output_tokens: 5 },
+    });
+
+    // Minimal JPEG magic bytes
+    const jpegBuffer = Buffer.from([
+      0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46,
+      0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01,
+      0x00, 0x01, 0x00, 0x00, 0xff, 0xd9,
+    ]);
+
+    const provider = anthropic('claude-sonnet-4-6');
+    await provider.extractFromImage({ image: jpegBuffer, prompt: fakePrompt });
+
+    const call = mockAnthropicCreate.mock.calls[0][0];
+    expect(call.messages[0].content[0].source.media_type).toBe('image/jpeg');
   });
 
   it('throws when ANTHROPIC_API_KEY is not set', async () => {

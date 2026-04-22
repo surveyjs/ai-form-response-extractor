@@ -6,12 +6,7 @@ type AnthropicMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp
 const SUPPORTED_MEDIA_TYPES = new Set<string>(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 
 async function toBase64(image: ImageInput): Promise<{ data: string; mediaType: AnthropicMediaType }> {
-  if (Buffer.isBuffer(image) || image instanceof Uint8Array) {
-    const buffer = Buffer.isBuffer(image) ? image : Buffer.from(image);
-    return { data: buffer.toString('base64'), mediaType: 'image/png' };
-  }
-
-  const dataUrl = typeof image === 'string' && image.startsWith('data:')
+  const dataUrl = (typeof image === 'string' && image.startsWith('data:'))
     ? image
     : await imageToBase64(image);
   const match = dataUrl.match(/^data:([^;,]+)[^,]*;base64,(.+)$/);
