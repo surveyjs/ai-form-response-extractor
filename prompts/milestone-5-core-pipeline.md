@@ -30,9 +30,12 @@ Wire up the full end-to-end extraction pipeline in `createExtractor()`.
        - "You are a document data extraction assistant"
        - "Extract field values from the scanned form image"
        - "Return valid JSON only, using canonical schema keys/values (`name`/`value`)"
-      - "For `signaturepad` fields, return Base64-encoded image strings"
        - "For each field, include your confidence (0.0-1.0) in a parallel `_confidence` object"
        - "If a field is not visible or unreadable, use null"
+    - If the form contains `signaturepad` elements, append signature-specific guidance:
+       - instruct extraction of the actual handwritten signature marks
+       - require Base64-encoded image string output for signature fields
+       - include signature field names/titles so model can match labels in the scanned document
 
 4. **Call LLM Provider**
    - Convert image to base64 via `imageToBase64()`
