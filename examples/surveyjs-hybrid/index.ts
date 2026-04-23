@@ -1,5 +1,5 @@
-import { createExtractor } from 'hybrid-form-ai';
-import { openai } from 'hybrid-form-ai/providers';
+import { createExtractor } from 'ai-form-response-extractor';
+import { openai } from 'ai-form-response-extractor/providers';
 import { readFileSync } from 'fs';
 
 // Sample SurveyJS form definition

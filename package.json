@@ -1,5 +1,5 @@
 {
-  "name": "hybrid-form-ai",
+  "name": "ai-form-response-extractor",
   "version": "0.1.5",
   "description": "Hybrid paper + digital form collection powered by multimodal LLMs",
   "main": "dist/index.js",
@@ -51,7 +51,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/surveyjs/hybrid-form-ai.git"
+    "url": "https://github.com/surveyjs/ai-form-response-extractor.git"
   },
   "engines": {
     "node": ">=18.0.0"

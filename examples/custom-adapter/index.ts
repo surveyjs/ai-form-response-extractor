@@ -1,6 +1,6 @@
-import { createExtractor } from 'hybrid-form-ai';
-import { ollama } from 'hybrid-form-ai/providers';
-import type { FormAdapter } from 'hybrid-form-ai';
+import { createExtractor } from 'ai-form-response-extractor';
+import { ollama } from 'ai-form-response-extractor/providers';
+import type { FormAdapter } from 'ai-form-response-extractor';
 
 // Custom adapter for a simple field list format
 const myAdapter: FormAdapter = {

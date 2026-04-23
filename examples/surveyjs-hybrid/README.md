@@ -5,7 +5,7 @@ End-to-end example: extract structured data from a scanned SurveyJS form using O
 ## Setup
 
 ```bash
-npm install hybrid-form-ai openai
+npm install ai-form-response-extractor openai
 export OPENAI_API_KEY=sk-...
 ```
 

@@ -1,6 +1,6 @@
 # Build Plan
 
-**Project:** hybrid-form-ai  
+**Project:** ai-form-response-extractor  
 **Created:** April 15, 2026  
 **Status:** Phase 1 — MVP
 
@@ -80,7 +80,7 @@
 - [ ] ESLint config
 - [ ] CI pipeline (GitHub Actions)
 - [ ] Write comprehensive tests (target 80%+ coverage)
-- [ ] Publish to npm as `hybrid-form-ai@0.1.0`
+- [ ] Publish to npm as `ai-form-response-extractor@0.1.0`
 
 ---
 

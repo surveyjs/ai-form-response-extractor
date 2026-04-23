@@ -1,5 +1,5 @@
 /**
- * Core types for hybrid-form-ai
+ * Core types for ai-form-response-extractor
  */
 
 /** Single document input — scanned image or digital PDF provided as a file path, URL, Buffer, or Uint8Array */

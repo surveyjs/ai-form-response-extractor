@@ -1,7 +1,7 @@
-# hybrid-form-ai
+# ai-form-response-extractor
 
-[![CI](https://github.com/surveyjs/hybrid-form-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/surveyjs/hybrid-form-ai/actions/workflows/ci.yml)
-[![npm version](https://img.shields.io/npm/v/hybrid-form-ai.svg)](https://www.npmjs.com/package/hybrid-form-ai)
+[![CI](https://github.com/surveyjs/ai-form-response-extractor/actions/workflows/ci.yml/badge.svg)](https://github.com/surveyjs/ai-form-response-extractor/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/ai-form-response-extractor.svg)](https://www.npmjs.com/package/ai-form-response-extractor)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **Hybrid paper + digital form collection powered by multimodal LLMs.**
@@ -25,14 +25,14 @@ A lightweight, open-source alternative to enterprise IDP solutions like Rossum, 
 ## Installation
 
 ```bash
-npm install hybrid-form-ai
+npm install ai-form-response-extractor
 ```
 
 ## Quick Start
 
 ```typescript
-import { createExtractor } from 'hybrid-form-ai';
-import { openai } from 'hybrid-form-ai/providers';
+import { createExtractor } from 'ai-form-response-extractor';
+import { openai } from 'ai-form-response-extractor/providers';
 import { readFileSync } from 'fs';
 
 // 1. Create an extractor with your preferred LLM provider
@@ -77,7 +77,7 @@ console.log(result.confidence);    // Per-field confidence scores
 ## Switching Providers
 
 ```typescript
-import { openai, anthropic, ollama } from 'hybrid-form-ai/providers';
+import { openai, anthropic, ollama } from 'ai-form-response-extractor/providers';
 
 // OpenAI
 createExtractor({ provider: openai('gpt-4o') });
@@ -92,7 +92,7 @@ createExtractor({ provider: ollama('llama-3.2-vision') });
 ## Standalone Utilities
 
 ```typescript
-import { detectUniqueId, mergeResponses } from 'hybrid-form-ai';
+import { detectUniqueId, mergeResponses } from 'ai-form-response-extractor';
 
 // Detect QR code or unique ID from an image
 const id = await detectUniqueId(imageBuffer);
@@ -124,11 +124,12 @@ const merged = mergeResponses(onlineResponses, paperExtractions);
 
 ## Demo
 
-See the [hybrid-form-ai-demo](https://github.com/surveyjs/hybrid-form-ai-demo) repository for a full working demo.
+See the [ai-form-response-extractor-demo](https://github.com/surveyjs/ai-form-response-extractor-demo) repository for a full working demo.
 
 ## Documentation
 
 - [SPEC.md](./SPEC.md) — Full project specification
+- [npm](https://www.npmjs.com/package/ai-form-response-extractor)
 - [docs/build-plan.md](./docs/build-plan.md) — Build plan and milestones
 - [docs/architecture.md](./docs/architecture.md) — Architecture details
 - [examples/](./examples/) — Working examples

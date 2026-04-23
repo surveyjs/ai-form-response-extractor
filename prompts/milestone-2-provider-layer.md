@@ -5,7 +5,7 @@ Implement the LLM provider layer with OpenAI, Anthropic, and Ollama support.
 
 ## Instructions
 
-Implement the LLM provider layer for `hybrid-form-ai`.
+Implement the LLM provider layer for `ai-form-response-extractor`.
 
 ### OpenAI Provider (`src/providers/openai.ts`)
 Implement the `extractFromImage` method using the `openai` npm package:

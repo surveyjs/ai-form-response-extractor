@@ -21,9 +21,9 @@ Finalize the project for the v0.1.0 npm release.
   - `dist/index.d.ts` (types) exists
   - `dist/providers/index.js`, `dist/providers/index.mjs`, `dist/providers/index.d.ts` exist
 - Verify exports work:
-  - `const { createExtractor } = require('hybrid-form-ai')` — CJS
-  - `import { createExtractor } from 'hybrid-form-ai'` — ESM
-  - `import { openai } from 'hybrid-form-ai/providers'` — subpath export
+  - `const { createExtractor } = require('ai-form-response-extractor')` — CJS
+  - `import { createExtractor } from 'ai-form-response-extractor'` — ESM
+  - `import { openai } from 'ai-form-response-extractor/providers'` — subpath export
 - Verify TypeScript types resolve correctly for consumers
 
 ### Pre-publish Checklist

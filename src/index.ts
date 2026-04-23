@@ -1,4 +1,4 @@
-// hybrid-form-ai — Main entry point
+// ai-form-response-extractor — Main entry point
 // See SPEC.md for full API design
 
 export { createExtractor } from './core/extractor';

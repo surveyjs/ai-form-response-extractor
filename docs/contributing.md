@@ -1,6 +1,6 @@
 # Contributing Guide
 
-**Project:** hybrid-form-ai
+**Project:** ai-form-response-extractor
 
 ## Getting Started
 

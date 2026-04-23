@@ -43,7 +43,7 @@ async function toBase64List(image: ImageInput): Promise<AnthropicInput[]> {
  *
  * @example
  * ```typescript
- * import { anthropic } from 'hybrid-form-ai/providers';
+ * import { anthropic } from 'ai-form-response-extractor/providers';
  * const provider = anthropic('claude-4-sonnet');
  * ```
  */

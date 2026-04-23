@@ -36,7 +36,7 @@ async function toEncodedInputs(image: ImageInput): Promise<EncodedInput[]> {
  *
  * @example
  * ```typescript
- * import { openai } from 'hybrid-form-ai/providers';
+ * import { openai } from 'ai-form-response-extractor/providers';
  * const provider = openai('gpt-4o');
  * ```
  */

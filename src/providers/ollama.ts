@@ -36,7 +36,7 @@ async function toBase64Strings(image: ImageInput): Promise<string[]> {
  *
  * @example
  * ```typescript
- * import { ollama } from 'hybrid-form-ai/providers';
+ * import { ollama } from 'ai-form-response-extractor/providers';
  * const provider = ollama('llama-3.2-vision');
  * ```
  */

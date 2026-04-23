@@ -1,13 +1,13 @@
 # SPEC.md
 
-**Project:** hybrid-form-ai  
+**Project:** ai-form-response-extractor  
 **Version:** 0.1.0 (MVP Draft)  
 **Last Updated:** April 22, 2026  
 **Status:** Living Document — This is the authoritative specification for the project.
 
 ## 1. Overview
 
-`hybrid-form-ai` is a lightweight, open-source TypeScript npm package that enables **hybrid paper + digital form collection** using multimodal Large Language Models (LLMs).
+`ai-form-response-extractor` is a lightweight, open-source TypeScript npm package that enables **hybrid paper + digital form collection** using multimodal Large Language Models (LLMs).
 
 You design a form **once** using SurveyJS (or any JSON-based schema), generate printable PDFs with unique IDs or QR codes, collect responses both online and on paper, then use this library to intelligently extract structured data from scanned or photographed paper forms and merge them with online responses.
 
@@ -30,7 +30,7 @@ Provide a simple, flexible, and cost-effective open-source alternative to expens
 
 ```mermaid
 flowchart TD
-    A[Form Definition<br/>(SurveyJS JSON)] --> C[hybrid-form-ai Core]
+    A[Form Definition<br/>(SurveyJS JSON)] --> C[ai-form-response-extractor Core]
     B[Scanned Image / Photo<br/>or Digital PDF] --> C
     C --> D[Input Preprocessing + QR/ID Detection]
     C --> E[Adapter Layer\n(SurveyJS → Prompt)]
@@ -44,8 +44,8 @@ flowchart TD
 ## 4. Public API (Target Design)
 
 ```typescript
-import { createExtractor } from 'hybrid-form-ai';
-import { openai, anthropic, ollama } from 'hybrid-form-ai/providers';
+import { createExtractor } from 'ai-form-response-extractor';
+import { openai, anthropic, ollama } from 'ai-form-response-extractor/providers';
 
 const extractor = createExtractor({
   provider: openai('gpt-4o'),           // Easy switching between providers
@@ -119,7 +119,7 @@ console.log(result.data);               // Structured responses matching form sc
 ## 8. Planned Project Structure
 
 ```bash
-hybrid-form-ai/
+ai-form-response-extractor/
 ├── src/
 │   ├── core/                 # Extraction engine, main logic
 │   ├── providers/            # openai.ts, anthropic.ts, ollama.ts, base.ts

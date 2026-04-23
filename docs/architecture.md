@@ -1,6 +1,6 @@
 # Architecture
 
-**Project:** hybrid-form-ai  
+**Project:** ai-form-response-extractor  
 **Last Updated:** April 15, 2026
 
 ---
@@ -9,7 +9,7 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                      hybrid-form-ai                          │
+│                 ai-form-response-extractor                   │
 │                                                              │
 │  ┌─────────────┐  ┌──────────────┐  ┌────────────────────┐  │
 │  │   Adapters   │  │     Core     │  │    Providers       │  │

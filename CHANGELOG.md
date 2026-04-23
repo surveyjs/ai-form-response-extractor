@@ -22,5 +22,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cost tracking** — Optional token usage and cost metadata in extraction results
 - **Image preprocessing** — Optional resize and normalize via sharp (graceful fallback when unavailable)
 - **Multi-format image input** — Support for Buffer, Uint8Array, file paths, HTTP URLs, and base64 data URLs
-- **Subpath exports** — `hybrid-form-ai/providers` for tree-shakeable provider imports
+- **Subpath exports** — `ai-form-response-extractor/providers` for tree-shakeable provider imports
 - **Dual CJS/ESM build** — Full CommonJS, ES Module, and TypeScript declaration output
