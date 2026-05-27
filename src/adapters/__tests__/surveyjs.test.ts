@@ -318,6 +318,151 @@ describe('SurveyJSAdapter.toPrompt', () => {
     expect(adapter.toPrompt({})).toBe('');
   });
 
+  it('emits a top-level Hint line when survey-level aiHint is set', () => {
+    const form = {
+      aiHint: 'This is a CMS-1500 paper form; all checkboxes are filled with X marks.',
+      pages: [{
+        name: 'page1',
+        elements: [
+          { type: 'text', name: 'firstName', title: 'First Name', isRequired: true },
+        ],
+      }],
+    };
+    const prompt = adapter.toPrompt(form);
+    expect(prompt).toContain('Hint: This is a CMS-1500 paper form; all checkboxes are filled with X marks.');
+    const introIdx = prompt.indexOf('Extract the following form fields');
+    const surveyHintIdx = prompt.indexOf('Hint: This is a CMS-1500');
+    const fieldsIdx = prompt.indexOf('Fields:');
+    const firstFieldIdx = prompt.indexOf('"firstName"');
+    expect(introIdx).toBeLessThan(surveyHintIdx);
+    expect(surveyHintIdx).toBeLessThan(fieldsIdx);
+    expect(fieldsIdx).toBeLessThan(firstFieldIdx);
+  });
+
+  it('does not emit a top-level Hint line when survey-level aiHint is missing or empty', () => {
+    const formMissing = {
+      pages: [{ name: 'page1', elements: [{ type: 'text', name: 'a', title: 'A' }] }],
+    };
+    expect(adapter.toPrompt(formMissing)).not.toContain('Hint:');
+
+    const formEmpty = {
+      aiHint: '',
+      pages: [{ name: 'page1', elements: [{ type: 'text', name: 'a', title: 'A' }] }],
+    };
+    expect(adapter.toPrompt(formEmpty)).not.toContain('Hint:');
+  });
+
+  it('emits both survey-level and field-level Hint lines when both are set', () => {
+    const form = {
+      aiHint: 'Form-wide guidance.',
+      pages: [{
+        name: 'page1',
+        elements: [
+          { type: 'radiogroup', name: 'x', title: 'X', aiHint: 'Field-specific guidance.', choices: ['a', 'b'] },
+        ],
+      }],
+    };
+    const prompt = adapter.toPrompt(form);
+    const surveyHintIdx = prompt.indexOf('Hint: Form-wide guidance.');
+    const fieldHintIdx = prompt.indexOf('Hint: Field-specific guidance.');
+    expect(surveyHintIdx).toBeGreaterThanOrEqual(0);
+    expect(fieldHintIdx).toBeGreaterThan(surveyHintIdx);
+  });
+
+  it('emits a Hint line when aiHint is set on a radiogroup', () => {
+    const form = {
+      pages: [{
+        name: 'page1',
+        elements: [{
+          type: 'radiogroup',
+          name: 'gender',
+          title: 'Gender',
+          aiHint: 'Look for the filled circle next to a label.',
+          choices: ['Male', 'Female', 'Other'],
+        }],
+      }],
+    };
+    const prompt = adapter.toPrompt(form);
+    expect(prompt).toContain('Hint: Look for the filled circle next to a label.');
+    const firstLineIdx = prompt.indexOf('"gender"');
+    const hintIdx = prompt.indexOf('Hint:');
+    const typeIdx = prompt.indexOf('Type: single choice');
+    expect(firstLineIdx).toBeLessThan(hintIdx);
+    expect(hintIdx).toBeLessThan(typeIdx);
+  });
+
+  it('does not emit a Hint line when aiHint is missing or empty', () => {
+    const form = {
+      pages: [{
+        name: 'page1',
+        elements: [
+          { type: 'text', name: 'plain', title: 'Plain' },
+          { type: 'text', name: 'empty', title: 'Empty', aiHint: '' },
+        ],
+      }],
+    };
+    const prompt = adapter.toPrompt(form);
+    expect(prompt).not.toContain('Hint:');
+  });
+
+  it('emits a Hint line for text, radiogroup, and checkbox element types', () => {
+    const form = {
+      pages: [{
+        name: 'page1',
+        elements: [
+          { type: 'text', name: 't', title: 'T', aiHint: 'hint-for-text' },
+          { type: 'radiogroup', name: 'r', title: 'R', aiHint: 'hint-for-radio', choices: ['a', 'b'] },
+          { type: 'checkbox', name: 'c', title: 'C', aiHint: 'hint-for-checkbox', choices: ['a', 'b'] },
+        ],
+      }],
+    };
+    const prompt = adapter.toPrompt(form);
+    expect(prompt).toContain('Hint: hint-for-text');
+    expect(prompt).toContain('Hint: hint-for-radio');
+    expect(prompt).toContain('Hint: hint-for-checkbox');
+  });
+
+  it('regression: CMS-1500 Box 1 insurance_type fragment yields the expected prompt block', () => {
+    const form = {
+      pages: [{
+        name: 'page1',
+        elements: [{
+          type: 'radiogroup',
+          name: 'insurance_type',
+          title: '1. MEDICARE / MEDICAID / TRICARE / CHAMPVA / GROUP HEALTH PLAN / FECA BLK LUNG / OTHER',
+          aiHint: 'Box 1 has 7 small checkboxes in a single row. Each checkbox sits immediately to the LEFT of its label. Find the box containing an X or check mark and return the label printed directly to its right. The labels, left-to-right, are: Medicare, Medicaid, TRICARE, CHAMPVA, Group Health Plan, FECA Blk Lung, Other.',
+          choices: [
+            { value: 'medicare',  text: 'Medicare (Medicare#)' },
+            { value: 'medicaid',  text: 'Medicaid (Medicaid#)' },
+            { value: 'tricare',   text: 'TRICARE (ID#/DoD#)' },
+            { value: 'champva',   text: 'CHAMPVA (Member ID#)' },
+            { value: 'group',     text: 'Group Health Plan (ID#)' },
+            { value: 'feca',      text: 'FECA Blk Lung (ID#)' },
+            { value: 'other',     text: 'Other (ID#)' },
+          ],
+          isRequired: true,
+        }],
+      }],
+    };
+
+    const prompt = adapter.toPrompt(form);
+    expect(prompt).toContain('"insurance_type"');
+    expect(prompt).toContain('1. MEDICARE / MEDICAID / TRICARE / CHAMPVA / GROUP HEALTH PLAN / FECA BLK LUNG / OTHER (required)');
+    expect(prompt).toContain('   Hint: Box 1 has 7 small checkboxes');
+    expect(prompt).toContain('   Type: single choice');
+    expect(prompt).toContain('medicare (Medicare (Medicare#))');
+
+    const headerIdx = prompt.indexOf('"insurance_type"');
+    const hintIdx = prompt.indexOf('Hint: Box 1');
+    const typeIdx = prompt.indexOf('Type: single choice');
+    const choicesIdx = prompt.indexOf('Choices:');
+    const expectedIdx = prompt.indexOf('Expected value:');
+    expect(headerIdx).toBeLessThan(hintIdx);
+    expect(hintIdx).toBeLessThan(typeIdx);
+    expect(typeIdx).toBeLessThan(choicesIdx);
+    expect(choicesIdx).toBeLessThan(expectedIdx);
+  });
+
   it('skips signaturepad fields in prompt generation', () => {
     const form = {
       pages: [{

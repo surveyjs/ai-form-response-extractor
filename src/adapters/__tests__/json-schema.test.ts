@@ -57,6 +57,61 @@ describe('JsonSchemaAdapter.toPrompt', () => {
     expect(adapter.toPrompt({})).toBe('');
     expect(adapter.toPrompt({ type: 'object', properties: {} })).toBe('');
   });
+
+  it('emits a top-level Hint line when schema-level aiHint is set', () => {
+    const schema = {
+      type: 'object',
+      aiHint: 'All fields are extracted from page 1 only.',
+      properties: {
+        name: { type: 'string' },
+      },
+    };
+    const prompt = adapter.toPrompt(schema);
+    expect(prompt).toContain('Hint: All fields are extracted from page 1 only.');
+    const introIdx = prompt.indexOf('Extract the following fields');
+    const hintIdx = prompt.indexOf('Hint: All fields');
+    const fieldsIdx = prompt.indexOf('Fields:');
+    const firstFieldIdx = prompt.indexOf('"name"');
+    expect(introIdx).toBeLessThan(hintIdx);
+    expect(hintIdx).toBeLessThan(fieldsIdx);
+    expect(fieldsIdx).toBeLessThan(firstFieldIdx);
+  });
+
+  it('does not emit a top-level Hint line when schema-level aiHint is missing or empty', () => {
+    const schemaMissing = { type: 'object', properties: { x: { type: 'string' } } };
+    expect(adapter.toPrompt(schemaMissing)).not.toContain('Hint:');
+
+    const schemaEmpty = { type: 'object', aiHint: '', properties: { x: { type: 'string' } } };
+    expect(adapter.toPrompt(schemaEmpty)).not.toContain('Hint:');
+  });
+
+  it('prefers aiHint over description when both are set', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Full name of the person',
+          aiHint: 'Read the printed line below the "Patient Name" label.',
+        },
+      },
+    };
+    const prompt = adapter.toPrompt(schema);
+    expect(prompt).toContain('Hint: Read the printed line below the "Patient Name" label.');
+    expect(prompt).not.toContain('Description: Full name of the person');
+  });
+
+  it('keeps Description line unchanged when only description is set', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Full name of the person' },
+      },
+    };
+    const prompt = adapter.toPrompt(schema);
+    expect(prompt).toContain('Description: Full name of the person');
+    expect(prompt).not.toContain('Hint:');
+  });
 });
 
 // ─── toOutputSchema tests ───────────────────────────────────────

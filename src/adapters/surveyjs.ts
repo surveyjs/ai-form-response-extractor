@@ -26,6 +26,7 @@ interface SurveyElement {
   name: string;
   title?: string;
   isRequired?: boolean;
+  aiHint?: string;
   inputType?: string;
   choices?: Array<string | SurveyChoice>;
   columns?: Array<string | SurveyColumn>;
@@ -272,6 +273,10 @@ function describeElement(el: SurveyElement, index: number): string {
   const req = el.isRequired ? '(required)' : '(optional)';
   const lines: string[] = [`${index}. "${el.name}" — ${title} ${req}`];
 
+  if (typeof el.aiHint === 'string' && el.aiHint.length > 0) {
+    lines.push(`   Hint: ${el.aiHint}`);
+  }
+
   switch (el.type) {
     case 'text': {
       const it = el.inputType ?? 'text';
@@ -484,8 +489,14 @@ export class SurveyJSAdapter implements FormAdapter {
     const elements = flattenElements(collectElements(pages));
     if (elements.length === 0) return '';
 
-    const header =
-      'Extract the following form fields from the provided document pages and return a JSON object with the field names as keys.\n\nFields:';
+    const surveyHint = formDefinition.aiHint;
+    const intro = 'Extract the following form fields from the provided document pages and return a JSON object with the field names as keys.';
+    const headerParts: string[] = [intro];
+    if (typeof surveyHint === 'string' && surveyHint.length > 0) {
+      headerParts.push('', `Hint: ${surveyHint}`);
+    }
+    headerParts.push('', 'Fields:');
+    const header = headerParts.join('\n');
     const descriptions = elements.map((el, i) => describeElement(el, i + 1));
     const footer =
       '\nReturn a JSON object with the exact field names listed above as keys and the extracted values.';

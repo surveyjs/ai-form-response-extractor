@@ -112,6 +112,34 @@ const merged = mergeResponses(onlineResponses, paperExtractions);
 | `json-schema` | Standard JSON Schema support |
 | `custom` | Bring your own adapter via a simple interface |
 
+## Per-field AI extraction hints
+
+Add an optional `aiHint` to any field in your form definition to give the LLM per-field extraction guidance. The hint is appended to the generated prompt for that field and is **not** shown to end users (unlike `description`, which SurveyJS renders in the form UI).
+
+```json
+{
+  "type": "radiogroup",
+  "name": "insurance_type",
+  "title": "1. MEDICARE / MEDICAID / TRICARE / CHAMPVA / GROUP HEALTH PLAN / FECA BLK LUNG / OTHER",
+  "aiHint": "Box 1 has 7 small checkboxes in a single row. Each checkbox sits immediately to the LEFT of its label. Find the box containing an X or check mark and return the label printed directly to its right.",
+  "choices": [
+    { "value": "medicare", "text": "Medicare" },
+    { "value": "medicaid", "text": "Medicaid" }
+  ]
+}
+```
+
+The SurveyJS adapter emits the hint as an extra `Hint:` line in the prompt. The JSON Schema adapter accepts `aiHint` on any property and prefers it over `description` when both are present.
+
+You can also set `aiHint` at the **survey / schema root** for document-wide guidance that applies to every field — e.g., "This is a CMS-1500 paper form; all checkboxes are filled with X marks." It is rendered as a top-level `Hint:` line above the `Fields:` block.
+
+```json
+{
+  "aiHint": "This is a CMS-1500 paper form; all checkboxes are filled with X marks.",
+  "pages": [ ... ]
+}
+```
+
 ## Limitations
 
 - `signature` and `signaturepad` fields are intentionally not extracted.

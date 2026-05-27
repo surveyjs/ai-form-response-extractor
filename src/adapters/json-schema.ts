@@ -4,6 +4,7 @@ import type { FormAdapter } from './base';
 interface JsonSchemaProperty {
   type?: string;
   description?: string;
+  aiHint?: string;
   enum?: (string | number)[];
   items?: JsonSchemaProperty;
   properties?: Record<string, JsonSchemaProperty>;
@@ -12,6 +13,7 @@ interface JsonSchemaProperty {
 
 interface JsonSchemaDefinition {
   type?: string;
+  aiHint?: string;
   properties?: Record<string, JsonSchemaProperty>;
   required?: string[];
 }
@@ -20,7 +22,11 @@ function describeProperty(name: string, prop: JsonSchemaProperty, required: bool
   const req = required ? '(required)' : '(optional)';
   const parts: string[] = [`- "${name}" ${req}`];
   if (prop.type) parts.push(`  Type: ${prop.type}`);
-  if (prop.description) parts.push(`  Description: ${prop.description}`);
+  if (typeof prop.aiHint === 'string' && prop.aiHint.length > 0) {
+    parts.push(`  Hint: ${prop.aiHint}`);
+  } else if (prop.description) {
+    parts.push(`  Description: ${prop.description}`);
+  }
   if (prop.enum) parts.push(`  Allowed values: ${prop.enum.join(', ')}`);
   if (prop.type === 'array' && prop.items?.type) parts.push(`  Items type: ${prop.items.type}`);
   return parts.join('\n');
@@ -76,8 +82,13 @@ export class JsonSchemaAdapter implements FormAdapter {
     if (!properties || Object.keys(properties).length === 0) return '';
 
     const requiredSet = new Set(schema.required ?? []);
-    const header =
-      'Extract the following fields from the provided input and return a JSON object with these keys.\n\nFields:';
+    const intro = 'Extract the following fields from the provided input and return a JSON object with these keys.';
+    const headerParts: string[] = [intro];
+    if (typeof schema.aiHint === 'string' && schema.aiHint.length > 0) {
+      headerParts.push('', `Hint: ${schema.aiHint}`);
+    }
+    headerParts.push('', 'Fields:');
+    const header = headerParts.join('\n');
     const descriptions = Object.entries(properties).map(([name, prop]) =>
       describeProperty(name, prop, requiredSet.has(name)),
     );
