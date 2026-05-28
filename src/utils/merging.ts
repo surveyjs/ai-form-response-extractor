@@ -78,6 +78,101 @@ function mergeFields(
   return { merged, details };
 }
 
+/** A value carries no information for merging purposes. */
+function isEmptyValue(value: unknown): boolean {
+  return (
+    value === null ||
+    value === undefined ||
+    value === '' ||
+    (Array.isArray(value) && value.length === 0)
+  );
+}
+
+/** Sortable confidence — `null` (no signal) ranks below any real score. */
+function confidenceRank(confidence: number | null): number {
+  return confidence === null ? -1 : confidence;
+}
+
+/**
+ * Merge per-page `ExtractionResult`s of the SAME form into one result.
+ *
+ * Use this only when a multi-page form must be extracted with one model call
+ * per page (e.g. the combined request would exceed the token / `max_tokens`
+ * budget). When the pages fit in a single request, prefer
+ * `extractor.extractFromPages(...)`, which sends every page at once and needs
+ * no merge.
+ *
+ * Merge rule: a non-empty value always beats an empty one regardless of
+ * confidence — this is what prevents a page that lacks a section (and so
+ * reports those fields as a high-confidence blank) from overwriting the real
+ * value read from the page that did contain the section. Confidence only
+ * breaks ties between two non-empty (or two empty) candidates; on an exact tie
+ * the earlier page wins. Empty means `null | undefined | "" | []`.
+ */
+export function mergeExtractionResults(results: ExtractionResult[]): ExtractionResult {
+  const winners = new Map<string, FieldConfidence>();
+  const order: string[] = [];
+  let uniqueId: string | null = null;
+
+  for (const result of results) {
+    if (uniqueId === null && result.uniqueId != null && result.uniqueId !== '') {
+      uniqueId = result.uniqueId;
+    }
+
+    // Index this page's confidence entries so a field's value and its
+    // confidence are considered together.
+    const confidenceByField = new Map<string, FieldConfidence>();
+    for (const fc of result.confidence) {
+      confidenceByField.set(fc.fieldName, fc);
+    }
+
+    const fieldNames = new Set<string>([
+      ...Object.keys(result.data),
+      ...confidenceByField.keys(),
+    ]);
+
+    for (const fieldName of fieldNames) {
+      const existingFc = confidenceByField.get(fieldName);
+      const candidate: FieldConfidence = existingFc ?? {
+        fieldName,
+        value: result.data[fieldName] ?? null,
+        confidence: null,
+        flagged: false,
+      };
+
+      const current = winners.get(fieldName);
+      if (current === undefined) {
+        order.push(fieldName);
+        winners.set(fieldName, candidate);
+        continue;
+      }
+
+      const currentEmpty = isEmptyValue(current.value);
+      const candidateEmpty = isEmptyValue(candidate.value);
+
+      if (currentEmpty === candidateEmpty) {
+        // Same emptiness category → break the tie on confidence.
+        if (confidenceRank(candidate.confidence) > confidenceRank(current.confidence)) {
+          winners.set(fieldName, candidate);
+        }
+      } else if (currentEmpty) {
+        // Non-empty beats empty regardless of confidence.
+        winners.set(fieldName, candidate);
+      }
+    }
+  }
+
+  const data: Record<string, unknown> = {};
+  const confidence: FieldConfidence[] = [];
+  for (const fieldName of order) {
+    const winner = winners.get(fieldName)!;
+    data[fieldName] = winner.value;
+    confidence.push({ ...winner, fieldName });
+  }
+
+  return { data, uniqueId, confidence };
+}
+
 /**
  * Merge online and paper-extracted responses.
  * Matches records by unique ID and combines fields.

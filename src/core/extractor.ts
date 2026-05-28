@@ -2,6 +2,7 @@ import type {
   ExtractorConfig,
   ExtractionResult,
   ExtractFromImageInput,
+  ExtractFromPagesInput,
   FieldConfidence,
 } from './types';
 import type { FormAdapter } from '../adapters/base';
@@ -152,168 +153,196 @@ export function createExtractor(config: ExtractorConfig) {
   const shouldPreprocess = opts.preprocessImage ?? true;
   const logCosts = opts.logCosts ?? false;
 
-  return {
-    async extractFromImage(
-      input: ExtractFromImageInput
-    ): Promise<ExtractionResult> {
-      // 1. Preprocess image/pages (optional)
-      const image = shouldPreprocess
-        ? await preprocessImage(input.image)
-        : input.image;
+  async function extractFromImageImpl(
+    input: ExtractFromImageInput
+  ): Promise<ExtractionResult> {
+    // 1. Preprocess image/pages (optional)
+    const image = shouldPreprocess
+      ? await preprocessImage(input.image)
+      : input.image;
 
-      // 2. Detect unique ID
-      const idResult = await detectUniqueId(image);
-      const uniqueId = idResult.id ?? input.uniqueIdHint ?? null;
+    // 2. Detect unique ID
+    const idResult = await detectUniqueId(image);
+    const uniqueId = idResult.id ?? input.uniqueIdHint ?? null;
 
-      // 3. Generate prompt
-      const fieldPrompt = adapter.toPrompt(input.formDefinition);
-      const basePrompt = fieldPrompt;
-      const systemPrompt = buildSystemPrompt();
+    // 3. Generate prompt
+    const fieldPrompt = adapter.toPrompt(input.formDefinition);
+    const basePrompt = fieldPrompt;
+    const systemPrompt = buildSystemPrompt();
 
-      // 4. Get output schema for validation
-      const outputSchema = adapter.toOutputSchema(input.formDefinition);
+    // 4. Get output schema for validation
+    const outputSchema = adapter.toOutputSchema(input.formDefinition);
 
-      // Retry loop (steps 5-8)
-      const errors: string[] = [];
-      let prompt = basePrompt;
+    // Retry loop (steps 5-8)
+    const errors: string[] = [];
+    let prompt = basePrompt;
 
-      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        // Call LLM provider
+        const response = await provider.extractFromImage({
+          image,
+          prompt,
+          systemPrompt,
+        });
+
+        const rawContent = response.content;
+
+        // Check for truncated response (e.g. Anthropic max_tokens reached)
+        if (response.truncated) {
+          throw new Error(
+            'LLM response was truncated (token limit reached). The JSON output is incomplete.'
+          );
+        }
+
+        // Extract JSON from the LLM response, handling markdown fences
+        // and preamble/postamble text that some providers (e.g. Anthropic) add
+        const jsonContent = extractJsonFromResponse(rawContent);
+
+        // Parse JSON response
+        let parsed: Record<string, unknown>;
         try {
-          // Call LLM provider
-          const response = await provider.extractFromImage({
-            image,
-            prompt,
-            systemPrompt,
-          });
+          parsed = JSON.parse(jsonContent);
+        } catch {
+          throw new Error(`Invalid JSON in LLM response: ${rawContent.slice(0, 200)}`);
+        }
 
-          const rawContent = response.content;
+        if (adapter.normalizeResponseData) {
+          parsed = adapter.normalizeResponseData(input.formDefinition, parsed);
+        }
 
-          // Check for truncated response (e.g. Anthropic max_tokens reached)
-          if (response.truncated) {
-            throw new Error(
-              'LLM response was truncated (token limit reached). The JSON output is incomplete.'
-            );
-          }
+        // Extract _confidence object before validation
+        let confidenceMap = (parsed._confidence ?? {}) as Record<string, number>;
+        if (adapter.normalizeResponseData && confidenceMap && typeof confidenceMap === 'object' && !Array.isArray(confidenceMap)) {
+          confidenceMap = adapter.normalizeResponseData(
+            input.formDefinition,
+            confidenceMap as Record<string, unknown>,
+          ) as Record<string, number>;
+        }
+        const dataWithoutConfidence = { ...parsed };
+        delete dataWithoutConfidence._confidence;
 
-          // Extract JSON from the LLM response, handling markdown fences
-          // and preamble/postamble text that some providers (e.g. Anthropic) add
-          const jsonContent = extractJsonFromResponse(rawContent);
-
-          // Parse JSON response
-          let parsed: Record<string, unknown>;
-          try {
-            parsed = JSON.parse(jsonContent);
-          } catch {
-            throw new Error(`Invalid JSON in LLM response: ${rawContent.slice(0, 200)}`);
-          }
-
-          if (adapter.normalizeResponseData) {
-            parsed = adapter.normalizeResponseData(input.formDefinition, parsed);
-          }
-
-          // Extract _confidence object before validation
-          let confidenceMap = (parsed._confidence ?? {}) as Record<string, number>;
-          if (adapter.normalizeResponseData && confidenceMap && typeof confidenceMap === 'object' && !Array.isArray(confidenceMap)) {
-            confidenceMap = adapter.normalizeResponseData(
-              input.formDefinition,
-              confidenceMap as Record<string, unknown>,
-            ) as Record<string, number>;
-          }
-          const dataWithoutConfidence = { ...parsed };
-          delete dataWithoutConfidence._confidence;
-
-          // Track which fields were null (for confidence scoring) then
-          // convert null → undefined so Zod .optional() accepts them
-          const nullFields = new Set<string>();
-          for (const [key, val] of Object.entries(dataWithoutConfidence)) {
-            if (val === null) {
-              nullFields.add(key);
-              dataWithoutConfidence[key] = undefined;
-            }
-          }
-
-          // Validate with Zod
-          const validationResult = outputSchema.safeParse(dataWithoutConfidence);
-          if (!validationResult.success) {
-            const zodErrors = validationResult.error.issues
-              .map((i: { path: (string | number)[]; message: string }) => `${i.path.join('.')}: ${i.message}`)
-              .join('; ');
-            throw new Error(`Schema validation failed: ${zodErrors}`);
-          }
-
-          const data = validationResult.data as Record<string, unknown>;
-
-          // Restore null for fields that were originally null
-          for (const field of nullFields) {
-            data[field] = null;
-          }
-
-          // Compute confidence scores over all schema-expected keys
-          // so consumers always get a consistent shape, even for
-          // optional fields the LLM omitted entirely.
-          const schemaKeys = getSchemaKeys(outputSchema);
-          const allKeys = schemaKeys.length > 0
-            ? schemaKeys
-            : Object.keys(data);
-
-          const confidence: FieldConfidence[] = allKeys.map((fieldName) => {
-            const value = fieldName in data ? data[fieldName] : null;
-            // Ensure omitted optional fields appear in data as null
-            if (!(fieldName in data)) {
-              data[fieldName] = null;
-            }
-            let fieldConfidence: number | null;
-            if (confidenceMap[fieldName] !== undefined) {
-              fieldConfidence = confidenceMap[fieldName];
-            } else if (value === null || value === undefined) {
-              // No signal: the model returned null without reporting confidence.
-              // A null value usually means "the field is blank on the form,"
-              // not "I'm uncertain" — so we don't fabricate a 0% score.
-              fieldConfidence = null;
-            } else {
-              fieldConfidence = 1.0;
-            }
-            return {
-              fieldName,
-              value,
-              confidence: fieldConfidence,
-              flagged: fieldConfidence !== null && fieldConfidence < confidenceThreshold,
-            };
-          });
-
-          // Build result
-          const result: ExtractionResult = {
-            data,
-            uniqueId,
-            confidence,
-            rawResponse: rawContent,
-          };
-
-          if (logCosts && response.usage) {
-            result.usage = {
-              promptTokens: response.usage.promptTokens,
-              completionTokens: response.usage.completionTokens,
-              totalTokens: response.usage.totalTokens,
-            };
-          }
-
-          return result;
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          errors.push(`Attempt ${attempt + 1}: ${message}`);
-
-          if (attempt < maxRetries) {
-            const isTruncation = message.includes('truncated');
-            prompt = isTruncation
-              ? `${basePrompt}\n\nIMPORTANT: Your previous response was cut off because it was too long. Return ONLY the JSON object. Do NOT include any explanation, markdown formatting, or code fences. Be as concise as possible while including ALL fields.`
-              : `${basePrompt}\n\nYour previous response was invalid: ${message}. Please return valid JSON.`;
+        // Track which fields were null (for confidence scoring) then
+        // convert null → undefined so Zod .optional() accepts them
+        const nullFields = new Set<string>();
+        for (const [key, val] of Object.entries(dataWithoutConfidence)) {
+          if (val === null) {
+            nullFields.add(key);
+            dataWithoutConfidence[key] = undefined;
           }
         }
-      }
 
-      throw new Error(
-        `Extraction failed after ${maxRetries + 1} attempts. Errors:\n${errors.join('\n')}`
-      );
+        // Validate with Zod
+        const validationResult = outputSchema.safeParse(dataWithoutConfidence);
+        if (!validationResult.success) {
+          const zodErrors = validationResult.error.issues
+            .map((i: { path: (string | number)[]; message: string }) => `${i.path.join('.')}: ${i.message}`)
+            .join('; ');
+          throw new Error(`Schema validation failed: ${zodErrors}`);
+        }
+
+        const data = validationResult.data as Record<string, unknown>;
+
+        // Restore null for fields that were originally null
+        for (const field of nullFields) {
+          data[field] = null;
+        }
+
+        // Compute confidence scores over all schema-expected keys
+        // so consumers always get a consistent shape, even for
+        // optional fields the LLM omitted entirely.
+        const schemaKeys = getSchemaKeys(outputSchema);
+        const allKeys = schemaKeys.length > 0
+          ? schemaKeys
+          : Object.keys(data);
+
+        const confidence: FieldConfidence[] = allKeys.map((fieldName) => {
+          const value = fieldName in data ? data[fieldName] : null;
+          // Ensure omitted optional fields appear in data as null
+          if (!(fieldName in data)) {
+            data[fieldName] = null;
+          }
+          let fieldConfidence: number | null;
+          if (confidenceMap[fieldName] !== undefined) {
+            fieldConfidence = confidenceMap[fieldName];
+          } else if (value === null || value === undefined) {
+            // No signal: the model returned null without reporting confidence.
+            // A null value usually means "the field is blank on the form,"
+            // not "I'm uncertain" — so we don't fabricate a 0% score.
+            fieldConfidence = null;
+          } else {
+            fieldConfidence = 1.0;
+          }
+          return {
+            fieldName,
+            value,
+            confidence: fieldConfidence,
+            flagged: fieldConfidence !== null && fieldConfidence < confidenceThreshold,
+          };
+        });
+
+        // Build result
+        const result: ExtractionResult = {
+          data,
+          uniqueId,
+          confidence,
+          rawResponse: rawContent,
+        };
+
+        if (logCosts && response.usage) {
+          result.usage = {
+            promptTokens: response.usage.promptTokens,
+            completionTokens: response.usage.completionTokens,
+            totalTokens: response.usage.totalTokens,
+          };
+        }
+
+        return result;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        errors.push(`Attempt ${attempt + 1}: ${message}`);
+
+        if (attempt < maxRetries) {
+          const isTruncation = message.includes('truncated');
+          prompt = isTruncation
+            ? `${basePrompt}\n\nIMPORTANT: Your previous response was cut off because it was too long. Return ONLY the JSON object. Do NOT include any explanation, markdown formatting, or code fences. Be as concise as possible while including ALL fields.`
+            : `${basePrompt}\n\nYour previous response was invalid: ${message}. Please return valid JSON.`;
+        }
+      }
+    }
+
+    throw new Error(
+      `Extraction failed after ${maxRetries + 1} attempts. Errors:\n${errors.join('\n')}`
+    );
+  }
+
+  return {
+    /**
+     * Extract field values from a single document input.
+     *
+     * Passing an array of images extracts a single form spanning multiple pages
+     * in one model call. For multi-page forms prefer {@link extractFromPages},
+     * which makes that intent explicit and avoids the per-page-merge footgun.
+     */
+    extractFromImage(input: ExtractFromImageInput): Promise<ExtractionResult> {
+      return extractFromImageImpl(input);
+    },
+
+    /**
+     * Extract a single form that spans multiple scanned pages.
+     *
+     * All pages are sent to the model in ONE request, so the model sees the whole
+     * form at once. Prefer this over calling extractFromImage per page and merging:
+     * a page that lacks a section reports those fields as a high-confidence blank,
+     * which a naive confidence-based merge would use to overwrite real values read
+     * from another page.
+     */
+    extractFromPages(input: ExtractFromPagesInput): Promise<ExtractionResult> {
+      return extractFromImageImpl({
+        image: input.pages,
+        formDefinition: input.formDefinition,
+        uniqueIdHint: input.uniqueIdHint,
+      });
     },
   };
 }

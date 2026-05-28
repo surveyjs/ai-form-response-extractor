@@ -3,7 +3,7 @@
 
 export { createExtractor } from './core/extractor';
 export { detectUniqueId } from './utils/qr';
-export { mergeResponses } from './utils/merging';
+export { mergeResponses, mergeExtractionResults } from './utils/merging';
 
 export type {
   ExtractorConfig,

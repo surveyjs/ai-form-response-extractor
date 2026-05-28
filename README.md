@@ -70,6 +70,47 @@ console.log(result.confidence);    // Per-field confidence scores
 // image: readFileSync('./scanned-form.pdf')   // PDF containing scanned page images
 ```
 
+## Multi-page forms
+
+When one logical form is supplied as several scanned page images (or you simply want the model to read several pages as a single document), use `extractFromPages`. All pages are sent to the model in **one** request, so the model sees the whole form at once:
+
+```typescript
+const result = await extractor.extractFromPages({
+  pages: [
+    readFileSync('./application-page-1.png'),
+    readFileSync('./application-page-2.png'),
+    readFileSync('./application-page-3.png'),
+  ],
+  formDefinition,
+});
+```
+
+`extractFromImage({ image: [...] })` accepts the same array and behaves identically — `extractFromPages` is just the named, self-documenting entry point.
+
+> **Do not loop over pages and merge by confidence.** The tempting pattern below **silently erases real values**:
+>
+> ```typescript
+> // ❌ WRONG — drops data
+> for (const page of pages) {
+>   const r = await extractor.extractFromImage({ image: page, formDefinition });
+>   // ...merge r.data, keeping the higher-confidence value per field
+> }
+> ```
+>
+> When a page does **not** contain a given section, the model reports those fields as `null` with **high confidence** ("I'm sure this is blank"). A confidence-max merge then lets that high-confidence blank overwrite the real value extracted from the page that *did* contain the section. Passing all pages in one call (`extractFromPages`) avoids the problem entirely — the model never sees a field as "missing" just because it's on another page.
+>
+> If you genuinely must call per page — e.g. a very large form whose combined request would exceed the token/`max_tokens` budget — use the provided `mergeExtractionResults(results)` helper instead of hand-rolling a merge. It applies the correct rule: a non-empty value always beats an empty one regardless of confidence, and confidence only breaks ties between two non-empty (or two empty) candidates.
+>
+> ```typescript
+> import { mergeExtractionResults } from 'ai-form-response-extractor';
+>
+> const perPage = [];
+> for (const page of pages) {
+>   perPage.push(await extractor.extractFromImage({ image: page, formDefinition }));
+> }
+> const result = mergeExtractionResults(perPage);
+> ```
+
 ## PDF Provider Notes
 
 Both **digital PDFs** (text/vector content) and **scanned-image PDFs** (pages stored as raster images inside a PDF container) are accepted. Pass either as a `Buffer` via `readFileSync()` — the library forwards the raw PDF bytes to the provider without rasterizing.

@@ -1,6 +1,25 @@
 import { describe, it, expect } from 'vitest';
-import { mergeResponses } from '../merging';
-import type { ExtractionResult } from '../../core/types';
+import { mergeResponses, mergeExtractionResults } from '../merging';
+import type { ExtractionResult, FieldConfidence } from '../../core/types';
+
+/** Build an ExtractionResult from a {field: [value, confidence]} map. */
+function makeResult(
+  fields: Record<string, [value: unknown, confidence: number | null]>,
+  uniqueId: string | null = null,
+): ExtractionResult {
+  const data: Record<string, unknown> = {};
+  const confidence: FieldConfidence[] = [];
+  for (const [fieldName, [value, conf]] of Object.entries(fields)) {
+    data[fieldName] = value;
+    confidence.push({
+      fieldName,
+      value,
+      confidence: conf,
+      flagged: conf !== null && conf < 0.75,
+    });
+  }
+  return { data, uniqueId, confidence };
+}
 
 function makeExtraction(
   data: Record<string, unknown>,
@@ -194,5 +213,95 @@ describe('mergeResponses', () => {
     const result = mergeResponses(online, paper);
 
     expect(result[0].field).toBe('online-val');
+  });
+});
+
+describe('mergeExtractionResults', () => {
+  it('non-empty value beats a high-confidence blank from another page', () => {
+    // The regression this exists to prevent: page 1 read the real value, page 2
+    // (which lacks the section) reports it as a high-confidence null.
+    const page1 = makeResult({ fullName: ['John Doe', 0.8] });
+    const page2 = makeResult({ fullName: [null, 0.95] });
+
+    const merged = mergeExtractionResults([page1, page2]);
+
+    expect(merged.data.fullName).toBe('John Doe');
+    const fc = merged.confidence.find((c) => c.fieldName === 'fullName');
+    expect(fc?.value).toBe('John Doe');
+    expect(fc?.confidence).toBe(0.8);
+  });
+
+  it('non-empty beats empty regardless of page order', () => {
+    const page1 = makeResult({ education: [null, 0.9] });
+    const page2 = makeResult({ education: ["Bachelor's Degree", 0.7] });
+
+    const merged = mergeExtractionResults([page1, page2]);
+
+    expect(merged.data.education).toBe("Bachelor's Degree");
+  });
+
+  it('breaks ties between two non-empty values by confidence', () => {
+    const page1 = makeResult({ city: ['NYC', 0.6] });
+    const page2 = makeResult({ city: ['Los Angeles', 0.9] });
+
+    const merged = mergeExtractionResults([page1, page2]);
+
+    expect(merged.data.city).toBe('Los Angeles');
+    expect(merged.confidence.find((c) => c.fieldName === 'city')?.confidence).toBe(0.9);
+  });
+
+  it('keeps the earlier page on an exact confidence tie', () => {
+    const page1 = makeResult({ name: ['First', 0.8] });
+    const page2 = makeResult({ name: ['Second', 0.8] });
+
+    const merged = mergeExtractionResults([page1, page2]);
+
+    expect(merged.data.name).toBe('First');
+  });
+
+  it('treats empty string and empty array as empty', () => {
+    const page1 = makeResult({ note: ['', 0.95], tags: [[], 0.95] });
+    const page2 = makeResult({ note: ['Important', 0.5], tags: [['a', 'b'], 0.5] });
+
+    const merged = mergeExtractionResults([page1, page2]);
+
+    expect(merged.data.note).toBe('Important');
+    expect(merged.data.tags).toEqual(['a', 'b']);
+  });
+
+  it('combines disjoint fields from different pages', () => {
+    const page1 = makeResult({ a: ['valueA', 0.9] });
+    const page2 = makeResult({ b: ['valueB', 0.9] });
+
+    const merged = mergeExtractionResults([page1, page2]);
+
+    expect(merged.data).toEqual({ a: 'valueA', b: 'valueB' });
+    expect(merged.confidence).toHaveLength(2);
+  });
+
+  it('a real confidence beats a null (no-signal) confidence on two non-empty values', () => {
+    const page1 = makeResult({ x: ['fromNullSignal', null] });
+    const page2 = makeResult({ x: ['fromScored', 0.4] });
+
+    const merged = mergeExtractionResults([page1, page2]);
+
+    expect(merged.data.x).toBe('fromScored');
+  });
+
+  it('uses the first non-null uniqueId across pages', () => {
+    const page1 = makeResult({ a: ['x', 0.9] }, null);
+    const page2 = makeResult({ b: ['y', 0.9] }, 'FORM-7');
+    const page3 = makeResult({ c: ['z', 0.9] }, 'FORM-9');
+
+    const merged = mergeExtractionResults([page1, page2, page3]);
+
+    expect(merged.uniqueId).toBe('FORM-7');
+  });
+
+  it('returns an empty result for empty input', () => {
+    const merged = mergeExtractionResults([]);
+    expect(merged.data).toEqual({});
+    expect(merged.confidence).toEqual([]);
+    expect(merged.uniqueId).toBeNull();
   });
 });

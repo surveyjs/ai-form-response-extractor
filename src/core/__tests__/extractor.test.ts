@@ -563,6 +563,62 @@ describe('createExtractor', () => {
       expect(call.image).toHaveLength(3);
     });
 
+    it('extractFromPages sends all pages to the provider in a single call', async () => {
+      const provider = createMockProvider([
+        {
+          content: JSON.stringify({
+            fullName: 'John Doe',
+            highestEducation: 'Bachelor\'s Degree',
+            reference3: 'Jane Smith, Manager, 555-1234',
+          }),
+        },
+      ]);
+
+      const extractor = createExtractor({
+        provider,
+        adapter: 'surveyjs',
+        options: { preprocessImage: false },
+      });
+
+      const pages = [VALID_TINY_PNG, VALID_TINY_PNG, VALID_TINY_PNG];
+      const result = await extractor.extractFromPages({
+        pages,
+        formDefinition: multiPageSurveyDef,
+      });
+
+      expect(result.data).toEqual({
+        fullName: 'John Doe',
+        highestEducation: 'Bachelor\'s Degree',
+        reference3: 'Jane Smith, Manager, 555-1234',
+      });
+
+      // N pages → exactly ONE provider call, with all pages forwarded as an array.
+      expect(provider.extractFromImage).toHaveBeenCalledTimes(1);
+      const call = (provider.extractFromImage as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(Array.isArray(call.image)).toBe(true);
+      expect(call.image).toHaveLength(pages.length);
+    });
+
+    it('extractFromPages forwards the uniqueIdHint', async () => {
+      const provider = createMockProvider([
+        { content: JSON.stringify({ fullName: 'John Doe', highestEducation: 'BSc', reference3: 'Ref' }) },
+      ]);
+
+      const extractor = createExtractor({
+        provider,
+        adapter: 'surveyjs',
+        options: { preprocessImage: false },
+      });
+
+      const result = await extractor.extractFromPages({
+        pages: [VALID_TINY_PNG, VALID_TINY_PNG],
+        formDefinition: multiPageSurveyDef,
+        uniqueIdHint: 'FORM-APP-42',
+      });
+
+      expect(result.uniqueId).toBe('FORM-APP-42');
+    });
+
     it('passes native PDF input through to the provider', async () => {
       const provider = createMockProvider([
         {

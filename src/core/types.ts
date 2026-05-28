@@ -65,3 +65,11 @@ export interface ExtractFromImageInput {
   formDefinition: Record<string, unknown>;
   uniqueIdHint?: string;
 }
+
+/** Input to extractFromPages — a single form whose content spans multiple scanned pages */
+export interface ExtractFromPagesInput {
+  /** Ordered page images / document sources making up one logical form */
+  pages: SingleImageInput[];
+  formDefinition: Record<string, unknown>;
+  uniqueIdHint?: string;
+}

@@ -1,6 +1,6 @@
 {
   "name": "ai-form-response-extractor",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Hybrid paper + digital form collection powered by multimodal LLMs",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
