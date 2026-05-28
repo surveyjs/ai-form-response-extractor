@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Dynamic panel normalization (SurveyJS adapter)** — Response data for `paneldynamic` questions is now normalized per entry. Each item in the panel array has its template-element titles mapped back to names and any nested choice text (e.g. `radiogroup`/`dropdown` labels) converted to choice values, matching the behavior already applied to top-level and `matrixdynamic` fields. Previously dynamic-panel entries returned by the model under their display titles failed Zod validation against the generated output schema.
+
 ## [0.1.9] - 2026-05-28
 
 ### Changed

@@ -208,6 +208,16 @@ function normalizeSurveyResponseByNameTitle(
       }
     }
 
+    if (el.type === 'paneldynamic' && el.templateElements && el.templateElements.length > 0) {
+      const panelValue = normalizedRoot[el.name];
+      if (Array.isArray(panelValue)) {
+        const templateElements = flattenElements(el.templateElements);
+        normalizedRoot[el.name] = panelValue.map((entry) =>
+          normalizeSurveyResponseByNameTitle(entry, templateElements),
+        );
+      }
+    }
+
   }
 
   return normalizedRoot;

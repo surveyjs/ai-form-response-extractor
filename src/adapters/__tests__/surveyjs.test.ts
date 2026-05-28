@@ -1187,6 +1187,93 @@ describe('SurveyJSAdapter.toOutputSchema', () => {
     });
   });
 
+  it('maps paneldynamic template titles to names for every entry', () => {
+    const form = {
+      pages: [{
+        name: 'page1',
+        elements: [
+          {
+            type: 'paneldynamic',
+            name: 'work_history',
+            title: 'Work history',
+            templateElements: [
+              { type: 'text', name: 'job_title', title: 'Job Title' },
+              { type: 'text', name: 'work_start_date', title: 'Start Date', inputType: 'date' },
+              { type: 'text', name: 'company_name', title: 'Company Name' },
+            ],
+          },
+        ],
+      }],
+    };
+
+    const normalized = adapter.normalizeResponseData(form, {
+      'Work history': [
+        { 'Job Title': 'Developer', 'Start Date': '2020-01-01', 'Company Name': 'Acme' },
+        { 'Job Title': 'Manager', 'Start Date': '2022-06-15', 'Company Name': 'Globex' },
+      ],
+    });
+
+    const schema = adapter.toOutputSchema(form);
+    const result = schema.safeParse(normalized);
+
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      throw new Error('Expected paneldynamic mapping to succeed');
+    }
+
+    expect(result.data).toEqual({
+      work_history: [
+        { job_title: 'Developer', work_start_date: '2020-01-01', company_name: 'Acme' },
+        { job_title: 'Manager', work_start_date: '2022-06-15', company_name: 'Globex' },
+      ],
+    });
+  });
+
+  it('normalizes nested choice text inside paneldynamic entries', () => {
+    const form = {
+      pages: [{
+        name: 'page1',
+        elements: [
+          {
+            type: 'paneldynamic',
+            name: 'jobs',
+            title: 'Jobs',
+            templateElements: [
+              { type: 'text', name: 'role', title: 'Role' },
+              {
+                type: 'radiogroup',
+                name: 'status',
+                title: 'Status',
+                choices: [
+                  { value: 'ft', text: 'Full Time' },
+                  { value: 'pt', text: 'Part Time' },
+                ],
+              },
+            ],
+          },
+        ],
+      }],
+    };
+
+    const normalized = adapter.normalizeResponseData(form, {
+      Jobs: [
+        { Role: 'Engineer', Status: 'Full Time' },
+      ],
+    });
+
+    const schema = adapter.toOutputSchema(form);
+    const result = schema.safeParse(normalized);
+
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      throw new Error('Expected nested paneldynamic choice mapping to succeed');
+    }
+
+    expect(result.data).toEqual({
+      jobs: [{ role: 'Engineer', status: 'ft' }],
+    });
+  });
+
   it('leaves unsupported signaturepad data untouched during normalization', () => {
     const form = {
       pages: [{
