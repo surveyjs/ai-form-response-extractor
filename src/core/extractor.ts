@@ -40,7 +40,11 @@ const BASE_SYSTEM_PROMPT =
   'Extract field values from the provided form input, which may be scanned images or native PDF documents. ' +
   'Return valid JSON only, matching the specified field names exactly. ' +
   'For each field, include your confidence (0.0-1.0) in a parallel "_confidence" object. ' +
-  'If a field is not visible or unreadable, use null.';
+  'If a field is not visible or unreadable, use null. ' +
+  'Always include a confidence value in "_confidence" for every field name in your output — ' +
+  'including fields whose value you set to null. ' +
+  'Use a high confidence (e.g., 0.9+) when you are sure the field is blank or not present on the form. ' +
+  'Use a low confidence (e.g., 0.2-0.5) when you are uncertain whether a value should have been there.';
 
 function buildSystemPrompt(): string {
   return BASE_SYSTEM_PROMPT;
@@ -258,17 +262,22 @@ export function createExtractor(config: ExtractorConfig) {
             if (!(fieldName in data)) {
               data[fieldName] = null;
             }
-            let fieldConfidence: number;
+            let fieldConfidence: number | null;
             if (confidenceMap[fieldName] !== undefined) {
               fieldConfidence = confidenceMap[fieldName];
+            } else if (value === null || value === undefined) {
+              // No signal: the model returned null without reporting confidence.
+              // A null value usually means "the field is blank on the form,"
+              // not "I'm uncertain" — so we don't fabricate a 0% score.
+              fieldConfidence = null;
             } else {
-              fieldConfidence = value === null || value === undefined ? 0.0 : 1.0;
+              fieldConfidence = 1.0;
             }
             return {
               fieldName,
               value,
               confidence: fieldConfidence,
-              flagged: fieldConfidence < confidenceThreshold,
+              flagged: fieldConfidence !== null && fieldConfidence < confidenceThreshold,
             };
           });
 

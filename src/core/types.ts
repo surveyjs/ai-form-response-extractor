@@ -12,7 +12,15 @@ export type ImageInput = SingleImageInput | SingleImageInput[];
 export interface FieldConfidence {
   fieldName: string;
   value: unknown;
-  confidence: number;
+  /**
+   * Confidence in the extracted value, in `[0, 1]`.
+   *
+   * `null` means "no signal" — the model returned the field as `null`/absent
+   * and did not provide a confidence value of its own. Callers that compute
+   * an overall-confidence metric should typically exclude `null` entries from
+   * their aggregate rather than treat them as 0.
+   */
+  confidence: number | null;
   flagged: boolean;
 }
 

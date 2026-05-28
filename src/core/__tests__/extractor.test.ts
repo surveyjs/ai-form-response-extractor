@@ -809,7 +809,7 @@ describe('createExtractor', () => {
   });
 
   describe('confidence scoring', () => {
-    it('assigns 1.0 to present fields and 0.0 to null fields', async () => {
+    it('assigns 1.0 to present fields and null (no signal) to null fields without reported confidence', async () => {
       const responseData = { firstName: 'John', lastName: 'Doe', email: null };
       const provider = createMockProvider([{ content: JSON.stringify(responseData) }]);
 
@@ -833,8 +833,57 @@ describe('createExtractor', () => {
       expect(lastNameConf?.flagged).toBe(false);
 
       const emailConf = result.confidence.find(c => c.fieldName === 'email');
-      expect(emailConf?.confidence).toBe(0.0);
-      expect(emailConf?.flagged).toBe(true);
+      expect(emailConf?.confidence).toBeNull();
+      expect(emailConf?.flagged).toBe(false);
+    });
+
+    it('uses reported confidence for null fields when the model provides one', async () => {
+      const responseData = {
+        firstName: 'John',
+        lastName: 'Doe',
+        email: null,
+        _confidence: { firstName: 0.95, lastName: 0.95, email: 0.9 },
+      };
+      const provider = createMockProvider([{ content: JSON.stringify(responseData) }]);
+
+      const extractor = createExtractor({
+        provider,
+        adapter: 'surveyjs',
+        options: { preprocessImage: false, confidenceThreshold: 0.75 },
+      });
+
+      const result = await extractor.extractFromImage({
+        image: TINY_PNG,
+        formDefinition: simpleSurveyDef,
+      });
+
+      // The model dutifully reported confidence even for the null value.
+      // The fallback should NOT have fired — the reported value flows through.
+      const emailConf = result.confidence.find(c => c.fieldName === 'email');
+      expect(emailConf?.value).toBeNull();
+      expect(emailConf?.confidence).toBe(0.9);
+      expect(emailConf?.flagged).toBe(false);
+    });
+
+    it('does not flag null-confidence fields regardless of threshold', async () => {
+      const responseData = { firstName: 'John', lastName: 'Doe', email: null };
+      const provider = createMockProvider([{ content: JSON.stringify(responseData) }]);
+
+      const extractor = createExtractor({
+        provider,
+        adapter: 'surveyjs',
+        options: { preprocessImage: false, confidenceThreshold: 0.99 },
+      });
+
+      const result = await extractor.extractFromImage({
+        image: TINY_PNG,
+        formDefinition: simpleSurveyDef,
+      });
+
+      const emailConf = result.confidence.find(c => c.fieldName === 'email');
+      expect(emailConf?.confidence).toBeNull();
+      // null confidence ≠ low confidence — should not be flagged.
+      expect(emailConf?.flagged).toBe(false);
     });
 
     it('uses _confidence from LLM when provided', async () => {
@@ -928,7 +977,7 @@ describe('createExtractor', () => {
       expect(result.confidence.every(c => c.flagged)).toBe(true);
     });
 
-    it('includes omitted optional fields in data and confidence with null/0.0', async () => {
+    it('includes omitted optional fields in data and confidence with null value / null confidence', async () => {
       // LLM returns only required fields, omitting optional "email"
       const responseData = { firstName: 'John', lastName: 'Doe' };
       const provider = createMockProvider([{ content: JSON.stringify(responseData) }]);
@@ -951,8 +1000,9 @@ describe('createExtractor', () => {
       expect(result.data.email).toBeNull();
 
       const emailConf = result.confidence.find(c => c.fieldName === 'email');
-      expect(emailConf?.confidence).toBe(0.0);
-      expect(emailConf?.flagged).toBe(true);
+      // No signal: the model didn't return the field and didn't report a confidence.
+      expect(emailConf?.confidence).toBeNull();
+      expect(emailConf?.flagged).toBe(false);
       expect(emailConf?.value).toBeNull();
     });
   });
@@ -1081,6 +1131,10 @@ describe('createExtractor', () => {
       expect(call.systemPrompt).toContain('scanned images or native PDF documents');
       expect(call.systemPrompt).toContain('Return valid JSON only');
       expect(call.systemPrompt).toContain('_confidence');
+      // Asks the model to report confidence even for null values, so the
+      // fallback (which assigns confidence=null) rarely fires in practice.
+      expect(call.systemPrompt).toContain('every field name');
+      expect(call.systemPrompt).toContain('null');
       expect(call.systemPrompt).not.toContain('signaturepad fields');
     });
 

@@ -22,7 +22,10 @@ function getConfidenceForField(
   fieldName: string
 ): number {
   const entry = confidence.find((c) => c.fieldName === fieldName);
-  return entry ? entry.confidence : 0;
+  // `null` confidence means "no signal" — treat it as 0 for comparison so
+  // online wins on the equal-confidence tiebreaker, matching the pre-existing
+  // behavior for missing entries.
+  return entry && entry.confidence !== null ? entry.confidence : 0;
 }
 
 function mergeFields(

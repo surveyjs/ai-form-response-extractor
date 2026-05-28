@@ -141,6 +141,43 @@ You can also set `aiHint` at the **survey / schema root** for document-wide guid
 }
 ```
 
+## Confidence Scores
+
+Every extraction returns `result.confidence`, a `FieldConfidence[]` with one entry per schema field:
+
+```ts
+interface FieldConfidence {
+  fieldName: string;
+  value: unknown;
+  confidence: number | null;   // null = "no signal" (see below)
+  flagged: boolean;
+}
+```
+
+- A **number in `[0, 1]`** — either reported by the LLM in its `_confidence` block, or `1.0` when the model returned a non-null value but no confidence for it.
+- **`null`** — "no signal." The model returned the field as `null` (or omitted it) and did not report a confidence value for it. A `null` value usually means the model determined the field is blank on the form, *not* that it is uncertain — so the library does **not** fabricate a 0% score in this case.
+
+Fields with `confidence === null` are never `flagged`, regardless of `confidenceThreshold`.
+
+### Recommended consumer pattern
+
+When aggregating confidence across many fields (e.g., an overall-confidence metric, or a "low-confidence fields" review list), exclude `null` confidences:
+
+```ts
+const scored = result.confidence.filter(c => c.confidence !== null);
+
+const overallConfidence =
+  scored.length === 0
+    ? null
+    : scored.reduce((sum, c) => sum + (c.confidence as number), 0) / scored.length;
+
+const lowConfidenceFields = result.confidence.filter(c => c.flagged);
+```
+
+This keeps correctly-blank optional fields from dragging down the overall metric on forms with many optional or conditional fields (e.g., CMS-1500 claims, where ~30 of ~95 fields are legitimately blank on any given form).
+
+The library nudges the model — via the system prompt — to report a confidence value even for `null` fields (use a high confidence when sure the field is blank, a low one when uncertain). When the model complies, the `null` confidence fallback rarely fires.
+
 ## Limitations
 
 - Signature fields are not extracted as structured data because they represent a visual verification element rather than a semantically structured answer. In most survey workflows, signatures are treated as document evidence rather than data fields.

@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Confidence scoring for null values** — When the model returns a field as `null` and does **not** report a confidence value for it, `FieldConfidence.confidence` is now `null` ("no signal") instead of `0`. This stops correctly-blank fields from being scored as 0% confident and from being marked as `flagged`. Fields with `confidence === null` are never flagged regardless of `confidenceThreshold`. The system prompt has also been strengthened to ask the model to report a confidence value for every field — including null values — so the fallback rarely fires in practice.
+
+  **Minor breaking change** — `FieldConfidence.confidence` is now typed `number | null` instead of `number`. Consumers that compute aggregate confidence metrics or build "low confidence fields" review lists should filter out entries where `confidence === null` rather than treating them as `0`. See the README "Confidence Scores" section for the recommended pattern.
+
 ## [0.1.0] - 2026-04-15
 
 ### Added
