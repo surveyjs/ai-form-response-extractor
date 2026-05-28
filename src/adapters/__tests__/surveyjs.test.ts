@@ -294,6 +294,21 @@ describe('SurveyJSAdapter.toPrompt', () => {
     expect(prompt).toContain('Name, Age');
   });
 
+  it('instructs the model to convert any date format to ISO YYYY-MM-DD', () => {
+    const form = {
+      pages: [{
+        name: 'page1',
+        elements: [
+          { type: 'text', name: 'dob', title: 'Date of Birth', inputType: 'date' },
+        ],
+      }],
+    };
+    const prompt = adapter.toPrompt(form);
+    expect(prompt).toContain('ISO format YYYY-MM-DD');
+    expect(prompt).toContain('convert it to YYYY-MM-DD');
+    expect(prompt).toContain('do not leave it blank');
+  });
+
   it('includes validator descriptions', () => {
     const form = {
       pages: [{

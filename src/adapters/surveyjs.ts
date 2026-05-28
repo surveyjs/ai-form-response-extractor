@@ -283,7 +283,7 @@ function describeElement(el: SurveyElement, index: number): string {
       lines.push(`   Type: text (${it})`);
       if (it === 'number') lines.push('   Expected value: a number');
       else if (it === 'email') lines.push('   Expected value: a valid email address');
-      else if (it === 'date') lines.push('   Expected value: a date string (YYYY-MM-DD)');
+      else if (it === 'date') lines.push('   Expected value: a date string in ISO format YYYY-MM-DD. The date may be handwritten or printed in any format (e.g. "March 14, 1992", "14/03/1992", "3-14-92"); convert it to YYYY-MM-DD. If a date is present on the document, always return it in this format — do not leave it blank because of how it is written.');
       else lines.push('   Expected value: a string');
       break;
     }

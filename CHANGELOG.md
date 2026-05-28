@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-05-28
+
 ### Changed
+
+- **Date field extraction (SurveyJS adapter)** — Text fields with `inputType: "date"` now generate a stronger prompt instruction that tells the model to convert any handwritten or printed date format (e.g. "March 14, 1992", "14/03/1992") to ISO `YYYY-MM-DD`, and to always return a visible date rather than leaving it blank because of its formatting. Previously the terse `(YYYY-MM-DD)` hint led some models to drop long-form handwritten dates, requiring a per-field `aiHint` as a workaround.
 
 - **Confidence scoring for null values** — When the model returns a field as `null` and does **not** report a confidence value for it, `FieldConfidence.confidence` is now `null` ("no signal") instead of `0`. This stops correctly-blank fields from being scored as 0% confident and from being marked as `flagged`. Fields with `confidence === null` are never flagged regardless of `confidenceThreshold`. The system prompt has also been strengthened to ask the model to report a confidence value for every field — including null values — so the fallback rarely fires in practice.
 
