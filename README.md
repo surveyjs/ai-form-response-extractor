@@ -52,8 +52,9 @@ const image = [
 ];
 const formDefinition = JSON.parse(readFileSync('./survey.json', 'utf-8'));
 
-// 3. Extract structured data from the provided form input
-const result = await extractor.extractFromImage({
+// 3. Extract structured data from the form input
+// (`extractFromImage` and `extractFromPages` are equivalent)
+const result = await extractor.extractFromImage({ // or extractFromPages()
   image,
   formDefinition,
 });
@@ -70,46 +71,50 @@ console.log(result.confidence);    // Per-field confidence scores
 // image: readFileSync('./scanned-form.pdf')   // PDF containing scanned page images
 ```
 
-## Multi-page forms
+## Multi-Page Extraction & Merging
 
-When one logical form is supplied as several scanned page images (or you simply want the model to read several pages as a single document), use `extractFromPages`. All pages are sent to the model in **one** request, so the model sees the whole form at once:
+Avoid extracting each page independently and merging results by confidence.
+
+Pages that do not contain a given section often return those fields as `null` with high confidence. A confidence-based merge can therefore overwrite valid values from other pages.
 
 ```typescript
+// ❌ WRONG — drops data
+for (const page of pages) {
+  const r = await extractor.extractFromImage({ image: page, formDefinition });
+  // merging by highest confidence per field can overwrite real values with nulls
+}
+```
+
+Instead, use `extractFromPages()` so the model processes the full document context:
+
+```ts
 const result = await extractor.extractFromPages({
   pages: [
-    readFileSync('./application-page-1.png'),
-    readFileSync('./application-page-2.png'),
-    readFileSync('./application-page-3.png'),
+    readFileSync('./scanned-form-page-1.png'),
+    readFileSync('./scanned-form-page-2.png'),
+    readFileSync('./scanned-form-page-3.png'),
   ],
   formDefinition,
 });
 ```
 
-`extractFromImage({ image: [...] })` accepts the same array and behaves identically — `extractFromPages` is just the named, self-documenting entry point.
+If per-page extraction is required (for example, due to token limits), use `mergeExtractionResults()` instead of a custom merge. It correctly prioritizes non-empty values over `null`, regardless of confidence.
 
-> **Do not loop over pages and merge by confidence.** The tempting pattern below **silently erases real values**:
->
-> ```typescript
-> // ❌ WRONG — drops data
-> for (const page of pages) {
->   const r = await extractor.extractFromImage({ image: page, formDefinition });
->   // ...merge r.data, keeping the higher-confidence value per field
-> }
-> ```
->
-> When a page does **not** contain a given section, the model reports those fields as `null` with **high confidence** ("I'm sure this is blank"). A confidence-max merge then lets that high-confidence blank overwrite the real value extracted from the page that *did* contain the section. Passing all pages in one call (`extractFromPages`) avoids the problem entirely — the model never sees a field as "missing" just because it's on another page.
->
-> If you genuinely must call per page — e.g. a very large form whose combined request would exceed the token/`max_tokens` budget — use the provided `mergeExtractionResults(results)` helper instead of hand-rolling a merge. It applies the correct rule: a non-empty value always beats an empty one regardless of confidence, and confidence only breaks ties between two non-empty (or two empty) candidates.
->
-> ```typescript
-> import { mergeExtractionResults } from 'ai-form-response-extractor';
->
-> const perPage = [];
-> for (const page of pages) {
->   perPage.push(await extractor.extractFromImage({ image: page, formDefinition }));
-> }
-> const result = mergeExtractionResults(perPage);
-> ```
+```ts
+import { mergeExtractionResults } from 'ai-form-response-extractor';
+
+const results = [];
+for (const page of pages) {
+  results.push(
+    await extractor.extractFromImage({
+      image: page,
+      formDefinition
+    })
+  );
+}
+
+const result = mergeExtractionResults(results);
+```
 
 ## PDF Provider Notes
 
@@ -154,16 +159,16 @@ const merged = mergeResponses(onlineResponses, paperExtractions);
 | `json-schema` | Standard JSON Schema support |
 | `custom` | Bring your own adapter via a simple interface |
 
-## Per-field AI extraction hints
+## Per-Field AI Extraction Hints
 
-Add an optional `aiHint` to any field in your form definition to give the LLM per-field extraction guidance. The hint is appended to the generated prompt for that field and is **not** shown to end users (unlike `description`, which SurveyJS renders in the form UI).
+You can add an optional `aiHint` to any field in your form definition to guide the LLM during extraction. The hint is appended to the prompt for that field and is **not shown to end users** (unlike `description`, which is rendered in the UI).
 
 ```json
 {
   "type": "radiogroup",
   "name": "insurance_type",
   "title": "1. MEDICARE / MEDICAID / TRICARE / CHAMPVA / GROUP HEALTH PLAN / FECA BLK LUNG / OTHER",
-  "aiHint": "Box 1 has 7 small checkboxes in a single row. Each checkbox sits immediately to the LEFT of its label. Find the box containing an X or check mark and return the label printed directly to its right.",
+  "aiHint": "Box 1 has 7 checkboxes in a row. Each sits left of its label. Return the label next to the marked box.",
   "choices": [
     { "value": "medicare", "text": "Medicare" },
     { "value": "medicaid", "text": "Medicaid" }
@@ -171,38 +176,40 @@ Add an optional `aiHint` to any field in your form definition to give the LLM pe
 }
 ```
 
-The SurveyJS adapter emits the hint as an extra `Hint:` line in the prompt. The JSON Schema adapter accepts `aiHint` on any property and prefers it over `description` when both are present.
+The SurveyJS adapter appends `aiHint` as a `Hint:` line in the prompt. The JSON schema adapter supports `aiHint` on any property and prefers it over `description` when both are present.
 
-You can also set `aiHint` at the **survey / schema root** for document-wide guidance that applies to every field — e.g., "This is a CMS-1500 paper form; all checkboxes are filled with X marks." It is rendered as a top-level `Hint:` line above the `Fields:` block.
+You can also set `aiHint` at the **schema root** for document-wide instructions (e.g., form type conventions, marking rules). It is emitted as a top-level `Hint:` above the `Fields:` section.
 
 ```json
 {
-  "aiHint": "This is a CMS-1500 paper form; all checkboxes are filled with X marks.",
-  "pages": [ ... ]
+  "aiHint": "CMS-1500 form: all checkboxes are marked with X.",
+  "pages": [ /* ... */ ]
 }
 ```
 
 ## Confidence Scores
 
-Every extraction returns `result.confidence`, a `FieldConfidence[]` with one entry per schema field:
+Each extraction returns `result.confidence`, an array of `FieldConfidence` (one per field):
 
 ```ts
 interface FieldConfidence {
   fieldName: string;
   value: unknown;
-  confidence: number | null;   // null = "no signal" (see below)
+  confidence: number | null;
   flagged: boolean;
 }
 ```
 
-- A **number in `[0, 1]`** — either reported by the LLM in its `_confidence` block, or `1.0` when the model returned a non-null value but no confidence for it.
-- **`null`** — "no signal." The model returned the field as `null` (or omitted it) and did not report a confidence value for it. A `null` value usually means the model determined the field is blank on the form, *not* that it is uncertain — so the library does **not** fabricate a 0% score in this case.
+`confidence` values:
 
-Fields with `confidence === null` are never `flagged`, regardless of `confidenceThreshold`.
+- **0-1 number** &ndash; Model-reported score, or `1.0` if a value is present but no score was provided.
+- **`null`** ("no signal") &ndash; The field was returned as `null` or omitted with no confidence. This typically means the field is **truly blank**, not uncertain.
 
-### Recommended consumer pattern
+Fields with `confidence === null` are never `flagged`.
 
-When aggregating confidence across many fields (e.g., an overall-confidence metric, or a "low-confidence fields" review list), exclude `null` confidences:
+### Recommended Aggregation
+
+Exclude `null` when computing metrics:
 
 ```ts
 const scored = result.confidence.filter(c => c.confidence !== null);
@@ -215,9 +222,9 @@ const overallConfidence =
 const lowConfidenceFields = result.confidence.filter(c => c.flagged);
 ```
 
-This keeps correctly-blank optional fields from dragging down the overall metric on forms with many optional or conditional fields (e.g., CMS-1500 claims, where ~30 of ~95 fields are legitimately blank on any given form).
+This avoids penalizing forms with legitimately empty optional fields (e.g. CMS-1500).
 
-The library nudges the model — via the system prompt — to report a confidence value even for `null` fields (use a high confidence when sure the field is blank, a low one when uncertain). When the model complies, the `null` confidence fallback rarely fires.
+The system prompt encourages emitting confidence even for blank fields, so `null` should be uncommon.
 
 ## Limitations
 
