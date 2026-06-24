@@ -279,3 +279,12 @@ Contributions are welcome! Please read the spec and build plan before starting w
 ## License
 
 [MIT](./LICENSE)
+
+## Related Resources
+
+- [AI Form Response Extractor Demo](https://github.com/surveyjs/ai-form-response-extractor-demo)
+- [SurveyJS Website](https://surveyjs.io/)
+- [SurveyJS Documentation](https://surveyjs.io/documentation)
+- [SurveyJS Form Library Demos](https://surveyjs.io/form-library/examples/overview)
+- [What's New in SurveyJS](https://surveyjs.io/WhatsNew)
+
